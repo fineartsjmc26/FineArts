@@ -1,0 +1,84 @@
+{
+  "users": [
+    {
+      "id": "u1",
+      "username": "admin",
+      "password": "admin123",
+      "role": "admin",
+      "name": "System Administrator"
+    },
+    {
+      "id": "u2",
+      "username": "incharge1",
+      "password": "user123",
+      "role": "incharge",
+      "name": "Student Incharge 1"
+    }
+  ],
+  "departments": [
+    "Computer Science",
+    "Information Technology",
+    "Electronics & Comm",
+    "Commerce",
+    "Mathematics"
+  ],
+  "sections": [
+    "Section A",
+    "Section B",
+    "Section C",
+    "Section D"
+  ],
+  "teams": [
+    "Team Alpha",
+    "Team Beta",
+    "Team Gamma",
+    "Team Delta"
+  ],
+  "students": [
+    {
+      "id": "s1",
+      "name": "John Doe",
+      "rollNumber": "21CS01",
+      "registerNumber": "910021104001",
+      "mobile": "9876543210",
+      "department": "Aided",
+      "deptName": "Computer Science",
+      "section": "Section A",
+      "teamId": "Team Alpha"
+    },
+    {
+      "id": "s2",
+      "name": "Jane Smith",
+      "rollNumber": "21CS02",
+      "registerNumber": "910021104002",
+      "mobile": "9876543211",
+      "department": "Self-Finance",
+      "deptName": "Information Technology",
+      "section": "Section B",
+      "teamId": "Team Alpha"
+    },
+    {
+      "id": "s3",
+      "name": "Robert Brown",
+      "rollNumber": "21CS03",
+      "registerNumber": "910021104003",
+      "mobile": "9876543212",
+      "department": "Aided",
+      "deptName": "Commerce",
+      "section": "Section A",
+      "teamId": "Team Beta"
+    },
+    {
+      "id": "s4",
+      "name": "Emily Davis",
+      "rollNumber": "21CS04",
+      "registerNumber": "910021104004",
+      "mobile": "9876543213",
+      "department": "Self-Finance",
+      "deptName": "Mathematics",
+      "section": "Section C",
+      "teamId": "Team Gamma"
+    }
+  ],
+  "attendance": []
+}

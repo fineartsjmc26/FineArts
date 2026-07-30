@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Attendance Management System</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#2563eb" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="img/unnamed.png" type="image/png" />
+  <link rel="apple-touch-icon" href="img/unnamed.png" />
+
+  <!-- SheetJS Library for Excel Export -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+  <!-- Firebase Web SDK v10 (Compat Version) -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="firebase-config.js"></script>
+</head>
+<body>
+
+  <!-- App Loader -->
+  <div class="app-loader" id="appLoader"><div class="loader-mark">A</div></div>
+
+  <div class="app-shell" id="appShellRoot">
+
+    <!-- Mobile sidebar overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar hidden" id="appSidebar">
+      <div class="sidebar-top">
+        <div class="brand">
+          <div class="brand-logo"><img src="img/unnamed.png" alt="Attendance Studio" class="logo-img" /></div>
+          <div class="brand-text">
+            <div class="brand-title">Attendance Studio</div>
+            <div class="brand-subtitle">Premium admin workspace</div>
+          </div>
+        </div>
+        <button class="sidebar-collapse-btn" id="sidebarCollapseBtn" title="Collapse sidebar" aria-label="Collapse sidebar">
+          <svg data-lucide="chevron-left" width="16" height="16"></svg>
+        </button>
+      </div>
+
+      <nav class="sidebar-nav" aria-label="Main navigation">
+        <div class="sidebar-section-label">Navigation</div>
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="dashboardTab" type="button" aria-label="Open dashboard">
+            <span class="nav-icon"><svg data-lucide="layout-dashboard"></svg></span>
+            <span class="nav-label">Dashboard</span>
+          </button>
+          <button class="tab-btn" data-tab="markTab" type="button" aria-label="Open attendance page">
+            <span class="nav-icon"><svg data-lucide="clipboard-check"></svg></span>
+            <span class="nav-label">Attendance</span>
+          </button>
+          <button class="tab-btn" data-tab="recordsTab" type="button" aria-label="Open attendance history">
+            <span class="nav-icon"><svg data-lucide="history"></svg></span>
+            <span class="nav-label">Attendance History</span>
+          </button>
+          <button class="tab-btn" data-tab="studentsTab" type="button" aria-label="Open student master">
+            <span class="nav-icon"><svg data-lucide="graduation-cap"></svg></span>
+            <span class="nav-label">Student Master</span>
+          </button>
+          <button class="tab-btn admin-only" data-tab="deptsTab" type="button" aria-label="Manage departments">
+            <span class="nav-icon"><svg data-lucide="building-2"></svg></span>
+            <span class="nav-label">Departments</span>
+          </button>
+          <button class="tab-btn admin-only" data-tab="sectionsTab" type="button" aria-label="Manage sections">
+            <span class="nav-icon"><svg data-lucide="tag"></svg></span>
+            <span class="nav-label">Sections</span>
+          </button>
+          <button class="tab-btn admin-only" data-tab="teamsTab" type="button" aria-label="Manage teams">
+            <span class="nav-icon"><svg data-lucide="users"></svg></span>
+            <span class="nav-label">Teams</span>
+          </button>
+          <button class="tab-btn admin-only" data-tab="usersTab" type="button" aria-label="Manage users">
+            <span class="nav-icon"><svg data-lucide="key-round"></svg></span>
+            <span class="nav-label">Manage Users</span>
+          </button>
+          <button class="tab-btn" data-tab="recordsTab" type="button" aria-label="Open reports">
+            <span class="nav-icon"><svg data-lucide="file-bar-chart"></svg></span>
+            <span class="nav-label">Reports</span>
+          </button>
+          <button class="tab-btn" data-tab="usersTab" type="button" aria-label="Open settings">
+            <span class="nav-icon"><svg data-lucide="settings"></svg></span>
+            <span class="nav-label">Settings</span>
+          </button>
+          <button class="tab-btn logout-nav-btn" data-action="logout" type="button" aria-label="Log out">
+            <span class="nav-icon"><svg data-lucide="log-out"></svg></span>
+            <span class="nav-label">Logout</span>
+          </button>
+        </div>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="sidebar-user-card">
+          <div class="avatar" id="sidebarAvatar"><img src="img/unnamed.png" alt="Admin" class="avatar-img" /></div>
+          <div class="sidebar-user-meta">
+            <div class="sidebar-user-name" id="sidebarUserName">Admin</div>
+            <div class="sidebar-user-role" id="sidebarUserRole">Administrator</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <div class="main-col">
+
+      <!-- Top Header -->
+      <header class="header hidden" id="appHeader">
+        <div class="header-left">
+          <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu" aria-label="Open menu">
+            <svg data-lucide="menu" width="20" height="20"></svg>
+          </button>
+          <div class="header-brand">
+            <div class="brand-logo brand-logo-sm"><img src="img/unnamed.png" alt="Attendance Studio" class="logo-img" /></div>
+            <div class="header-titles">
+              <div class="header-welcome" id="headerWelcomeText">Welcome back</div>
+              <div class="breadcrumb">
+                <span>Workspace</span>
+                <span class="crumb-sep">/</span>
+                <span class="crumb-current" id="headerBreadcrumbCurrent">Dashboard</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="header-right">
+          <div class="header-date" id="headerDateText">
+            <svg data-lucide="calendar" width="14" height="14"></svg>
+            <span></span>
+          </div>
+          <button class="icon-btn" id="themeToggleBtn" title="Toggle theme" aria-label="Toggle color theme">
+            <svg data-lucide="moon" width="18" height="18"></svg>
+          </button>
+          <button class="icon-btn" id="notifBtn" title="Notifications" aria-label="Notifications">
+            <svg data-lucide="bell" width="18" height="18"></svg>
+            <span class="notif-dot"></span>
+          </button>
+          <div class="profile-menu-wrapper">
+            <button class="user-badge" id="profileMenuTrigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Open profile menu">
+              <div class="avatar" id="headerAvatar"><img src="img/unnamed.png" alt="Admin" class="avatar-img" /></div>
+              <div class="user-badge-meta">
+                <span class="user-badge-name" id="userNameDisplay">Admin</span>
+                <span class="user-role-tag" id="userRoleDisplay">ADMIN</span>
+              </div>
+            </button>
+            <div class="profile-menu" id="profileMenu" role="menu">
+              <div class="profile-menu-header">
+                <div class="avatar" id="menuAvatar"><img src="img/unnamed.png" alt="Admin" class="avatar-img" /></div>
+                <div>
+                  <div class="profile-menu-name" id="menuUserName">Admin</div>
+                  <div class="profile-menu-role" id="menuUserRole">Administrator</div>
+                </div>
+              </div>
+              <button class="profile-menu-item" id="logoutBtn" type="button" role="menuitem">
+                <svg data-lucide="log-out" width="15" height="15"></svg>
+                <span>Logout</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Login Section -->
+      <div class="auth-wrapper" id="authWrapper">
+        <div class="card auth-card">
+          <div style="text-align: center; margin-bottom: 1rem;">
+            <div class="brand-logo" style="margin: 0 auto 1rem auto; width: 56px; height: 56px; font-size: 1.8rem;"><img src="img/unnamed.png" alt="Attendance Studio" class="logo-img" style="width:100%; height:100%; object-fit:cover; border-radius:12px;" /></div>
+            <h2 class="auth-title">Welcome Back</h2>
+            <p class="auth-subtitle">Sign in to access student attendance portal</p>
+          </div>
+
+          <form id="loginForm">
+            <div class="form-group">
+              <label for="loginUsername">Username / User ID</label>
+              <input type="text" id="loginUsername" class="input-control" placeholder="Enter username (e.g. admin or incharge1)" required />
+            </div>
+
+            <div class="form-group">
+              <label for="loginPassword">Password</label>
+              <div class="password-wrapper">
+                <input type="password" id="loginPassword" class="input-control" placeholder="Enter password" required />
+                <button type="button" class="eye-btn" id="toggleLoginPassword" title="Toggle password visibility">👁️</button>
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-full" style="margin-top: 1.5rem;">
+              Sign In to Portal
+            </button>
+          </form>
+
+          <div style="margin-top: 1.5rem; text-align: center; font-size: 0.8rem; color: var(--text-muted); background: var(--bg); padding: 12px; border-radius: 8px; border: 1px dashed var(--border);">
+            <strong>Demo Login Credentials:</strong><br/>
+            Admin: <code>admin</code> / <code>admin123</code><br/>
+            Student Incharge: <code>incharge1</code> / <code>user123</code>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Application Container -->
+      <main class="container hidden" id="mainContainer">
+
+    <!-- Premium dashboard shell for the main overview experience -->
+    <section id="dashboardTab" class="tab-content">
+      <div class="hero-card">
+        <div class="hero-copy">
+          <span class="hero-badge">Operations overview</span>
+          <h2>Attendance insights, organized beautifully.</h2>
+          <p>Review student participation, monitor today’s sessions, and move between attendance, history, and management tools with a cleaner workspace.</p>
+          <div class="hero-actions">
+            <button class="btn btn-primary" type="button" data-tab-quick="markTab">Mark Attendance</button>
+            <button class="btn btn-secondary" type="button" data-tab-quick="recordsTab">View History</button>
+          </div>
+        </div>
+        <div class="hero-visual" aria-hidden="true">
+          <div class="hero-ring"></div>
+          <div class="hero-ring hero-ring-alt"></div>
+          <div class="hero-panel">
+            <div class="hero-panel-title">Attendance score</div>
+            <div class="hero-panel-value" id="dashboardAttendanceRate">0%</div>
+            <div class="hero-panel-meta">Live today’s activity</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+        <article class="dashboard-card accent-blue">
+          <div class="dashboard-card-top">
+            <span class="dashboard-icon"><svg data-lucide="users"></svg></span>
+            <span class="dashboard-pill">Students</span>
+          </div>
+          <div class="dashboard-card-value" id="dashboardStudentsCount">0</div>
+          <div class="dashboard-card-label">Registered learners</div>
+        </article>
+        <article class="dashboard-card accent-green">
+          <div class="dashboard-card-top">
+            <span class="dashboard-icon"><svg data-lucide="check-circle-2"></svg></span>
+            <span class="dashboard-pill">Present</span>
+          </div>
+          <div class="dashboard-card-value" id="dashboardPresentCount">0</div>
+          <div class="dashboard-card-label">Present today</div>
+        </article>
+        <article class="dashboard-card accent-red">
+          <div class="dashboard-card-top">
+            <span class="dashboard-icon"><svg data-lucide="alert-circle"></svg></span>
+            <span class="dashboard-pill">Absent</span>
+          </div>
+          <div class="dashboard-card-value" id="dashboardAbsentCount">0</div>
+          <div class="dashboard-card-label">Absent today</div>
+        </article>
+        <article class="dashboard-card accent-purple">
+          <div class="dashboard-card-top">
+            <span class="dashboard-icon"><svg data-lucide="users-2"></svg></span>
+            <span class="dashboard-pill">Teams</span>
+          </div>
+          <div class="dashboard-card-value" id="dashboardTeamsCount">0</div>
+          <div class="dashboard-card-label">Active teams</div>
+        </article>
+        <article class="dashboard-card accent-orange">
+          <div class="dashboard-card-top">
+            <span class="dashboard-icon"><svg data-lucide="building-2"></svg></span>
+            <span class="dashboard-pill">Departments</span>
+          </div>
+          <div class="dashboard-card-value" id="dashboardDepartmentsCount">0</div>
+          <div class="dashboard-card-label">Managed departments</div>
+        </article>
+        <article class="dashboard-card accent-blue">
+          <div class="dashboard-card-top">
+            <span class="dashboard-icon"><svg data-lucide="trending-up"></svg></span>
+            <span class="dashboard-pill">Attendance</span>
+          </div>
+          <div class="dashboard-card-value" id="dashboardRateCount">0%</div>
+          <div class="dashboard-card-label">Overall attendance rate</div>
+        </article>
+      </div>
+
+      <div class="dashboard-grid secondary-grid">
+        <article class="card section-shell">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">Recent activity</p>
+              <h3>Latest operations</h3>
+            </div>
+            <span class="soft-pill">Live feed</span>
+          </div>
+          <ul class="activity-list" id="recentActivityList"></ul>
+        </article>
+        <article class="card section-shell">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">Quick path</p>
+              <h3>Jump into daily tasks</h3>
+            </div>
+          </div>
+          <div class="stack-list">
+            <button class="quick-link" type="button" data-tab-quick="markTab">
+              <span class="quick-link-icon"><svg data-lucide="clipboard-check"></svg></span>
+              <span>Mark attendance for a team</span>
+            </button>
+            <button class="quick-link" type="button" data-tab-quick="studentsTab">
+              <span class="quick-link-icon"><svg data-lucide="graduation-cap"></svg></span>
+              <span>Manage student records</span>
+            </button>
+            <button class="quick-link" type="button" data-tab-quick="recordsTab">
+              <span class="quick-link-icon"><svg data-lucide="file-bar-chart"></svg></span>
+              <span>Open reporting history</span>
+            </button>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- TAB 1: MARK ATTENDANCE (5-HOUR SINGLE ROW CLICK BOXES BY TEAM & DATE) -->
+    <section id="markTab" class="tab-content hidden">
+      <div class="card section-shell">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Attendance</p>
+            <h2>Mark Team Attendance</h2>
+            <p>Choose a team and date, then switch each hour between present and absent with smooth chips.</p>
+          </div>
+          <span class="soft-pill">5-hour workflow</span>
+        </div>
+
+        <div class="filter-grid">
+          <div class="form-group">
+            <label>Select Team</label>
+            <select id="markTeamSelect" class="input-control"></select>
+          </div>
+          <div class="form-group">
+            <label>Select Date</label>
+            <input type="date" id="markDate" class="input-control" />
+          </div>
+        </div>
+
+        <div id="markLockBanner" class="hidden lock-banner">
+          <span><svg data-lucide="lock"></svg> <strong>Attendance Locked:</strong> Attendance for this team and date has already been marked and finalized.</span>
+          <button class="btn btn-secondary btn-sm admin-only" id="unlockBtn" type="button">Admin Unlock</button>
+        </div>
+
+        <div class="table-toolbar">
+          <h3 id="teamStudentCountTitle">Team Students</h3>
+          <div id="batchActionBtns" class="chip-row">
+            <button class="btn btn-secondary btn-sm" id="markAllPresentBtn" type="button">Mark All Present</button>
+            <button class="btn btn-secondary btn-sm" id="markAllAbsentBtn" type="button">Mark All Absent</button>
+          </div>
+        </div>
+
+        <div class="table-responsive responsive-cards">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Roll No</th>
+                <th>Register No</th>
+                <th>Student Name</th>
+                <th>Department Name</th>
+                <th>Category</th>
+                <th style="text-align: center; width: 60px;">H1</th>
+                <th style="text-align: center; width: 60px;">H2</th>
+                <th style="text-align: center; width: 60px;">H3</th>
+                <th style="text-align: center; width: 60px;">H4</th>
+                <th style="text-align: center; width: 60px;">H5</th>
+              </tr>
+            </thead>
+            <tbody id="attendanceMarkTbody"></tbody>
+          </table>
+        </div>
+
+        <div class="section-actions">
+          <button class="btn btn-success btn-primary" id="saveAttendanceBtn" type="button">
+            <svg data-lucide="save"></svg>
+            <span>Submit 5-Hour Attendance</span>
+          </button>
+        </div>
+        <button class="floating-action" id="saveAttendanceFab" type="button" aria-label="Save attendance">
+          <svg data-lucide="save"></svg>
+          <span>Save</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- TAB 2: ATTENDANCE RECORDS (ATTENDANCE DATA VIEWING AREA WITH CALENDAR & CATEGORIZATION) -->
+    <section id="recordsTab" class="tab-content hidden">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <h2>Attendance Stored Records (Data Viewing Area)</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem;">Select any date from the calendar to view stored attendance history</p>
+          </div>
+          <button class="btn btn-success" id="exportExcelBtn">
+            📥 Export Filtered Data to Excel (.xlsx)
+          </button>
+        </div>
+
+        <!-- Categorize & Filter Bar (With Calendar Date Picker) -->
+        <div class="filter-bar" style="align-items: flex-end;">
+          <div class="filter-title">🏷️ Filter & Categorize Data By:</div>
+
+          <div class="filter-group">
+            <label style="font-size: 0.8rem; color: var(--text-muted);">📅 Select Date (Calendar):</label>
+            <input type="date" id="filterDate" class="input-control" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" />
+          </div>
+
+          <button class="btn btn-secondary btn-sm" id="clearDateFilterBtn" style="white-space: nowrap; height: 38px; font-size: 0.8rem;">
+            📅 Show All Dates
+          </button>
+          
+          <div class="filter-group">
+            <label style="font-size: 0.8rem; color: var(--text-muted);">Categorize Team:</label>
+            <select id="filterTeam" class="input-control" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+              <option value="ALL">All Teams</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label style="font-size: 0.8rem; color: var(--text-muted);">Dept Name:</label>
+            <select id="filterDeptName" class="input-control" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+              <option value="ALL">All Department Names</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label style="font-size: 0.8rem; color: var(--text-muted);">Dept Category:</label>
+            <select id="filterDept" class="input-control" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+              <option value="ALL">All (Aided & Self-Finance)</option>
+              <option value="Aided">Aided</option>
+              <option value="Self-Finance">Self-Finance</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Summary Stats Cards -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total Student Sessions</div>
+            <div class="stat-val" id="statTotalRecs">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Hours Present</div>
+            <div class="stat-val" style="color: var(--success);" id="statPresentRecs">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Hours Absent</div>
+            <div class="stat-val" style="color: var(--danger);" id="statAbsentRecs">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Attendance Rate</div>
+            <div class="stat-val" style="color: var(--primary);" id="statRate">0%</div>
+          </div>
+        </div>
+
+        <!-- Records Table (5-Hour Single Row per Student) -->
+        <div class="table-responsive responsive-cards">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Team</th>
+                <th>Student Name</th>
+                <th>Roll No</th>
+                <th>Register No</th>
+                <th>Dept Name</th>
+                <th>Category</th>
+                <th style="text-align: center; width: 45px;">H1</th>
+                <th style="text-align: center; width: 45px;">H2</th>
+                <th style="text-align: center; width: 45px;">H3</th>
+                <th style="text-align: center; width: 45px;">H4</th>
+                <th style="text-align: center; width: 45px;">H5</th>
+                <th>Marked By</th>
+              </tr>
+            </thead>
+            <tbody id="recordsTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: STUDENT MASTER (ADD, EDIT, DELETE) -->
+    <section id="studentsTab" class="tab-content hidden">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <h2>Student Directory</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem;">Add, edit and delete student details</p>
+          </div>
+          <button class="btn btn-primary admin-only" id="openAddStudentModalBtn">
+            ➕ Add New Student
+          </button>
+        </div>
+
+        <div class="search-shell" style="max-width: 440px; margin-bottom: 1.25rem;">
+          <svg data-lucide="search" width="16" height="16"></svg>
+          <input type="text" id="studentSearchInput" class="input-control" placeholder="Search student by name, roll no, or register no" aria-label="Search students" />
+          <button class="search-clear" id="clearStudentSearchBtn" type="button" aria-label="Clear search">×</button>
+        </div>
+
+        <div class="table-responsive responsive-cards">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Roll No</th>
+                <th>Register No</th>
+                <th>Name</th>
+                <th>Mobile</th>
+                <th>Dept Name</th>
+                <th>Category</th>
+                <th>Section</th>
+                <th>Team</th>
+                <th class="admin-only">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="studentsTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: DEPARTMENTS MANAGEMENT (ADMIN ADD/REMOVE) -->
+    <section id="deptsTab" class="tab-content hidden">
+      <div class="card">
+        <h2>Department Names Management</h2>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;">
+          Add or remove Department Names dynamically (e.g. Computer Science, IT, Commerce, Mathematics).
+        </p>
+
+        <form id="addDeptForm" style="display: flex; gap: 12px; max-width: 500px; margin-bottom: 1.5rem;">
+          <input type="text" id="newDeptInput" class="input-control" placeholder="Enter Department Name (e.g. Computer Science)" required />
+          <button type="submit" class="btn btn-primary" style="white-space: nowrap;">Add Department</button>
+        </form>
+
+        <div class="tag-container" id="deptsTagList"></div>
+      </div>
+    </section>
+
+    <!-- TAB 5: SECTIONS MANAGEMENT (ADMIN ONLY) -->
+    <section id="sectionsTab" class="tab-content hidden">
+      <div class="card">
+        <h2>Sections Management</h2>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;">
+          Add or remove sections dynamically (e.g. Section A, Section B).
+        </p>
+
+        <form id="addSectionForm" style="display: flex; gap: 12px; max-width: 500px; margin-bottom: 1.5rem;">
+          <input type="text" id="newSectionInput" class="input-control" placeholder="Enter Section Name (e.g. Section D)" required />
+          <button type="submit" class="btn btn-primary" style="white-space: nowrap;">Add Section</button>
+        </form>
+
+        <div class="tag-container" id="sectionsTagList"></div>
+      </div>
+    </section>
+
+    <!-- TAB 6: TEAMS MANAGEMENT (ADMIN ONLY) -->
+    <section id="teamsTab" class="tab-content hidden">
+      <div class="card">
+        <h2>Teams Management</h2>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;">
+          Add or remove Teams dynamically (e.g. Team Alpha, Team Beta, Team Gamma).
+        </p>
+
+        <form id="addTeamForm" style="display: flex; gap: 12px; max-width: 500px; margin-bottom: 1.5rem;">
+          <input type="text" id="newTeamInput" class="input-control" placeholder="Enter Team Name (e.g. Team Epsilon)" required />
+          <button type="submit" class="btn btn-primary" style="white-space: nowrap;">Add Team</button>
+        </form>
+
+        <div class="tag-container" id="teamsTagList"></div>
+      </div>
+    </section>
+
+    <!-- TAB 7: MANAGE USERS (ADMIN ONLY - ADD/EDIT USER ID & PASSWORD AT ANY TIME) -->
+    <section id="usersTab" class="tab-content hidden">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+          <div>
+            <h2>User Account Management</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem;">Admins can add or change User IDs and passwords at any time</p>
+          </div>
+          <button class="btn btn-primary" id="openAddUserModalBtn">➕ Add New User</button>
+        </div>
+
+        <div class="table-responsive responsive-cards">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>User Name / ID</th>
+                <th>Full Name</th>
+                <th>Role</th>
+                <th>Password (Toggle Eye)</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="usersTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD / EDIT STUDENT -->
+  <div class="modal-backdrop hidden" id="studentModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" id="studentModalTitle">Add New Student</h3>
+        <button class="close-btn" id="closeStudentModal">&times;</button>
+      </div>
+
+      <form id="studentForm">
+        <input type="hidden" id="studentEditId" />
+
+        <div class="form-group">
+          <label>Student Name</label>
+          <input type="text" id="studentName" class="input-control" placeholder="Enter Full Name" required />
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="form-group">
+            <label>Roll Number</label>
+            <input type="text" id="studentRoll" class="input-control" placeholder="e.g. 21CS05" required />
+          </div>
+          <div class="form-group">
+            <label>Register Number</label>
+            <input type="text" id="studentRegister" class="input-control" placeholder="e.g. 910021104005" required />
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="form-group">
+            <label>Mobile Number</label>
+            <input type="tel" id="studentMobile" class="input-control" placeholder="e.g. 9876543210" required />
+          </div>
+          <div class="form-group">
+            <label>Department Name</label>
+            <select id="studentDeptName" class="input-control" required></select>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="form-group">
+            <label>Department Category</label>
+            <select id="studentDept" class="input-control" required>
+              <option value="Aided">Aided</option>
+              <option value="Self-Finance">Self-Finance</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Section</label>
+            <select id="studentSection" class="input-control" required></select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Assign Team</label>
+          <select id="studentTeam" class="input-control" required></select>
+        </div>
+
+        <div style="margin-top: 1.5rem; text-align: right;">
+          <button type="button" class="btn btn-secondary" id="cancelStudentBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Student Data</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD / EDIT USER ACCOUNT (ADMIN ONLY) -->
+  <div class="modal-backdrop hidden" id="userModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" id="userModalTitle">Add New User Account</h3>
+        <button class="close-btn" id="closeUserModal">&times;</button>
+      </div>
+
+      <form id="userForm">
+        <input type="hidden" id="userEditId" />
+
+        <div class="form-group">
+          <label>User Full Name</label>
+          <input type="text" id="newUserName" class="input-control" placeholder="Enter Full Name" required />
+        </div>
+
+        <div class="form-group">
+          <label>Username / User ID</label>
+          <input type="text" id="newUserUsername" class="input-control" placeholder="e.g. incharge2" required />
+        </div>
+
+        <div class="form-group">
+          <label>Password</label>
+          <div class="password-wrapper">
+            <input type="password" id="newUserPassword" class="input-control" placeholder="Enter password" required />
+            <button type="button" class="eye-btn" id="toggleNewUserPassword">👁️</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Role</label>
+          <select id="newUserRole" class="input-control" required>
+            <option value="incharge">Student Incharge</option>
+            <option value="admin">System Admin</option>
+          </select>
+        </div>
+
+        <div style="margin-top: 1.5rem; text-align: right;">
+          <button type="button" class="btn btn-secondary" id="cancelUserBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="saveUserBtn">Save User Account</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="ui-enhancements.js"></script>
+</body>
+</html>
