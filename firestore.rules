@@ -1,15 +1,67 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Allow read/write for all users during development/hosting
-    match /{document=**} {
-      allow read, write: if true;
+    function isAdmin() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    function isIncharge() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "incharge";
+    }
+
+    // Students
+    match /students/{studentId} {
+      allow read: if isAdmin() || isIncharge();
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Attendance
+    match /attendance/{attendanceId} {
+      allow read: if isAdmin() || isIncharge();
+
+      // Admin and Incharge can mark attendance
+      allow create: if isAdmin() || isIncharge();
+
+      // Only Admin can edit or delete attendance
+      allow update, delete: if isAdmin();
+    }
+
+    // Events
+    match /events/{eventId} {
+      allow read: if isAdmin() || isIncharge();
+      allow write: if isAdmin();
+    }
+
+    // Duties
+    match /duties/{dutyId} {
+      allow read: if isAdmin() || isIncharge();
+      allow write: if isAdmin();
+    }
+
+    // Users
+    match /users/{userId} {
+      allow read: if isSignedIn();
+
+      // Users can update only their own profile
+      allow update: if request.auth.uid == userId;
+
+      // Only Admin can create/delete users
+      allow create, delete: if isAdmin();
+    }
+
+    // Reports
+    match /reports/{reportId} {
+      allow read: if isAdmin() || isIncharge();
+      allow write: if isAdmin();
     }
   }
 }

@@ -33,6 +33,7 @@
   --shadow-lg: 0 24px 60px rgba(15, 23, 42, 0.12);
 
   --sidebar-w: 268px;
+  --sidebar-w: 280px;
   --sidebar-w-collapsed: 82px;
   --header-h: 74px;
 
@@ -203,18 +204,27 @@ a { color: inherit; }
 }
 
 .brand-logo {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
   border-radius: 12px;
   background: linear-gradient(135deg, var(--primary), var(--purple));
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 800;
-  font-size: 1.2rem;
+  font-size: 1.4rem;
   color: #fff;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.28);
+}
+
+/* smaller variant used in the header */
+.brand-logo.brand-logo-sm {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 10px;
+  font-size: 1rem;
 }
 
 /* Logo image sizing to replace textual placeholders */
@@ -251,6 +261,12 @@ a { color: inherit; }
   font-size: 0.72rem;
   color: var(--text-muted);
   margin-top: 1px;
+}
+
+.brand-tagline {
+  font-size: 0.66rem;
+  color: var(--text-faint);
+  margin-top: 2px;
 }
 
 .sidebar-collapse-btn {

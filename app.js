@@ -1,7 +1,7 @@
 // Complete Application Logic Connected to Firebase Realtime Database (finearts-e0cac) + Calendar Date Viewer
 
 // Application State
-let appData = {
+const defaultAppData = {
   users: [
     { id: "u1", username: "admin", password: "admin123", role: "admin", name: "System Administrator" },
     { id: "u2", username: "incharge1", password: "user123", role: "incharge", name: "Student Incharge 1" }
@@ -18,9 +18,21 @@ let appData = {
   attendance: []
 };
 
+let appData = JSON.parse(JSON.stringify(defaultAppData));
 let currentUser = null;
 let rtdb = null;
 const API_URL = '/api/data';
+
+Object.defineProperty(globalThis, 'appData', {
+  configurable: true,
+  enumerable: true,
+  get() {
+    return appData;
+  },
+  set(value) {
+    appData = value;
+  }
+});
 
 // Initialize Application
 document.addEventListener('DOMContentLoaded', async () => {
@@ -30,6 +42,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   initUIEvents();
   initPasswordToggles();
 });
+
+function getMergedAppData(source) {
+  const merged = {
+    users: Array.isArray(source?.users) && source.users.length ? source.users : defaultAppData.users,
+    departments: Array.isArray(source?.departments) && source.departments.length ? source.departments : defaultAppData.departments,
+    sections: Array.isArray(source?.sections) && source.sections.length ? source.sections : defaultAppData.sections,
+    teams: Array.isArray(source?.teams) && source.teams.length ? source.teams : defaultAppData.teams,
+    students: Array.isArray(source?.students) && source.students.length ? source.students : defaultAppData.students,
+    attendance: Array.isArray(source?.attendance) ? source.attendance : defaultAppData.attendance,
+  };
+
+  // preserve any extra properties without losing defaults
+  return { ...defaultAppData, ...merged, ...source };
+}
 
 // Initialize Firebase Realtime Database
 function initFirebase() {
@@ -41,7 +67,7 @@ function initFirebase() {
       rtdb.ref("attendance_master_data").on("value", (snapshot) => {
         const val = snapshot.val();
         if (val && val.users) {
-          appData = val;
+          appData = getMergedAppData(val);
           console.log("🔥 Real-time sync update received from Firebase!");
           if (currentUser) renderAllViews();
         }
@@ -59,7 +85,7 @@ async function loadAppData() {
       const snapshot = await rtdb.ref("attendance_master_data").once("value");
       const val = snapshot.val();
       if (val && val.users) {
-        appData = val;
+        appData = getMergedAppData(val);
         console.log("Data loaded successfully from Firebase Cloud Database (finearts-e0cac)");
         return;
       }
@@ -73,7 +99,7 @@ async function loadAppData() {
     if (res.ok) {
       const serverData = await res.json();
       if (serverData && serverData.users) {
-        appData = serverData;
+        appData = getMergedAppData(serverData);
         console.log("Data loaded from Local Server");
         return;
       }
@@ -84,7 +110,8 @@ async function loadAppData() {
 
   const local = localStorage.getItem('attendance_app_data');
   if (local) {
-    appData = JSON.parse(local);
+    const localData = JSON.parse(local);
+    appData = getMergedAppData(localData);
   }
 }
 
@@ -522,48 +549,106 @@ async function handleUnlockAttendance() {
 }
 
 // Attendance Records Viewing Area (With Calendar Date Filtering)
-function renderRecordsTable() {
+function getAttendanceSortValue(att) {
+  if (att?.timestamp) {
+    const parsed = Date.parse(att.timestamp);
+    return { hasTimestamp: true, value: Number.isNaN(parsed) ? att.timestamp : parsed };
+  }
+
+  const parsedDate = Date.parse(`${att?.date || ''}T00:00:00.000Z`);
+  return { hasTimestamp: false, value: Number.isNaN(parsedDate) ? `${att?.date || ''}` : parsedDate };
+}
+
+function getSortedAttendanceRecords() {
+  return appData.attendance
+    .map((att, index) => ({ att, index }))
+    .sort((left, right) => {
+      const leftSort = getAttendanceSortValue(left.att);
+      const rightSort = getAttendanceSortValue(right.att);
+
+      if (leftSort.hasTimestamp !== rightSort.hasTimestamp) {
+        return leftSort.hasTimestamp ? -1 : 1;
+      }
+
+      if (leftSort.hasTimestamp && rightSort.hasTimestamp) {
+        const timeDiff = rightSort.value - leftSort.value;
+        if (timeDiff !== 0) {
+          return timeDiff;
+        }
+      }
+
+      if (!leftSort.hasTimestamp && !rightSort.hasTimestamp) {
+        const dateDiff = rightSort.value - leftSort.value;
+        if (dateDiff !== 0) {
+          return dateDiff;
+        }
+      }
+
+      return left.index - right.index;
+    })
+    .map(({ att }) => att);
+}
+
+function getSortedFilteredAttendanceRows() {
   const filterDateVal = document.getElementById('filterDate').value;
   const filterTeamVal = document.getElementById('filterTeam').value;
   const filterDeptNameVal = document.getElementById('filterDeptName').value;
   const filterDeptVal = document.getElementById('filterDept').value;
-  const tbody = document.getElementById('recordsTbody');
-  tbody.innerHTML = '';
 
   let rowList = [], totalHoursCount = 0, presentHoursCount = 0, absentHoursCount = 0;
 
-  appData.attendance.forEach(att => {
-    if (att.studentAttendanceMap) {
-      Object.keys(att.studentAttendanceMap).forEach(studentId => {
-        const student = appData.students.find(s => s.id === studentId);
-        if (!student) return;
-        const hours = att.studentAttendanceMap[studentId];
+  getSortedAttendanceRecords().forEach(att => {
+    if (!att.studentAttendanceMap) return;
 
-        // Apply Calendar Date Filter
-        if (filterDateVal && att.date !== filterDateVal) return;
+    Object.keys(att.studentAttendanceMap).forEach(studentId => {
+      const student = appData.students.find(s => s.id === studentId);
+      if (!student) return;
+      const hours = att.studentAttendanceMap[studentId];
 
-        // Apply Categorize Filters
-        if (filterTeamVal !== 'ALL' && att.teamId !== filterTeamVal) return;
-        if (filterDeptNameVal !== 'ALL' && student.deptName !== filterDeptNameVal) return;
-        if (filterDeptVal !== 'ALL' && student.department !== filterDeptVal) return;
+      if (filterDateVal && att.date !== filterDateVal) return;
+      if (filterTeamVal !== 'ALL' && att.teamId !== filterTeamVal) return;
+      if (filterDeptNameVal !== 'ALL' && student.deptName !== filterDeptNameVal) return;
+      if (filterDeptVal !== 'ALL' && student.department !== filterDeptVal) return;
 
-        [hours.h1, hours.h2, hours.h3, hours.h4, hours.h5].forEach(st => {
-          totalHoursCount++;
-          if (st === 'P') presentHoursCount++; else absentHoursCount++;
-        });
-
-        rowList.push({
-          date: att.date, teamName: att.teamId, studentName: student.name,
-          rollNumber: student.rollNumber, registerNumber: student.registerNumber,
-          deptName: student.deptName || 'N/A', department: student.department,
-          h1: hours.h1 || 'P', h2: hours.h2 || 'P', h3: hours.h3 || 'P', h4: hours.h4 || 'P', h5: hours.h5 || 'P',
-          markedBy: att.markedBy
-        });
+      [hours.h1, hours.h2, hours.h3, hours.h4, hours.h5].forEach(st => {
+        totalHoursCount++;
+        if (st === 'P') presentHoursCount++; else absentHoursCount++;
       });
-    }
+
+      rowList.push({
+        date: att.date,
+        teamName: att.teamId,
+        studentName: student.name,
+        rollNumber: student.rollNumber,
+        registerNumber: student.registerNumber,
+        mobile: student.mobile,
+        deptName: student.deptName || 'N/A',
+        department: student.department,
+        section: student.section,
+        h1: hours.h1 || 'P',
+        h2: hours.h2 || 'P',
+        h3: hours.h3 || 'P',
+        h4: hours.h4 || 'P',
+        h5: hours.h5 || 'P',
+        markedBy: att.markedBy,
+        timestamp: att.timestamp,
+        sortDate: att.date
+      });
+    });
   });
 
+  return { rowList, totalHoursCount, presentHoursCount, absentHoursCount };
+}
+
+globalThis.getSortedFilteredAttendanceRows = getSortedFilteredAttendanceRows;
+
+function renderRecordsTable() {
+  const tbody = document.getElementById('recordsTbody');
+  tbody.innerHTML = '';
+
+  const { rowList, totalHoursCount, presentHoursCount, absentHoursCount } = getSortedFilteredAttendanceRows();
   const rate = totalHoursCount > 0 ? ((presentHoursCount / totalHoursCount) * 100).toFixed(1) + '%' : '0%';
+
   document.getElementById('statTotalRecs').textContent = rowList.length;
   document.getElementById('statPresentRecs').textContent = presentHoursCount;
   document.getElementById('statAbsentRecs').textContent = absentHoursCount;
@@ -600,32 +685,24 @@ function exportToExcel() {
   const filterTeamVal = document.getElementById('filterTeam').value;
   const filterDeptNameVal = document.getElementById('filterDeptName').value;
   const filterDeptVal = document.getElementById('filterDept').value;
-  const exportData = [];
-
-  appData.attendance.forEach(att => {
-    if (att.studentAttendanceMap) {
-      Object.keys(att.studentAttendanceMap).forEach(studentId => {
-        const student = appData.students.find(s => s.id === studentId);
-        if (!student) return;
-        const hours = att.studentAttendanceMap[studentId];
-
-        if (filterDateVal && att.date !== filterDateVal) return;
-        if (filterTeamVal !== 'ALL' && att.teamId !== filterTeamVal) return;
-        if (filterDeptNameVal !== 'ALL' && student.deptName !== filterDeptNameVal) return;
-        if (filterDeptVal !== 'ALL' && student.department !== filterDeptVal) return;
-
-        exportData.push({
-          'Date': att.date, 'Team': att.teamId, 'Student Name': student.name,
-          'Roll Number': student.rollNumber, 'Register Number': student.registerNumber,
-          'Mobile Number': student.mobile, 'Department Name': student.deptName || 'N/A',
-          'Department Category': student.department, 'Section': student.section,
-          'Hour 1 (H1)': hours.h1 || 'P', 'Hour 2 (H2)': hours.h2 || 'P',
-          'Hour 3 (H3)': hours.h3 || 'P', 'Hour 4 (H4)': hours.h4 || 'P',
-          'Hour 5 (H5)': hours.h5 || 'P', 'Marked By': att.markedBy
-        });
-      });
-    }
-  });
+  const { rowList } = getSortedFilteredAttendanceRows();
+  const exportData = rowList.map(row => ({
+    'Date': row.date,
+    'Team': row.teamName,
+    'Student Name': row.studentName,
+    'Roll Number': row.rollNumber,
+    'Register Number': row.registerNumber,
+    'Mobile Number': row.mobile,
+    'Department Name': row.deptName,
+    'Department Category': row.department,
+    'Section': row.section,
+    'Hour 1 (H1)': row.h1,
+    'Hour 2 (H2)': row.h2,
+    'Hour 3 (H3)': row.h3,
+    'Hour 4 (H4)': row.h4,
+    'Hour 5 (H5)': row.h5,
+    'Marked By': row.markedBy
+  }));
 
   if (exportData.length === 0) {
     alert('No data available to export with current date & filters!');
