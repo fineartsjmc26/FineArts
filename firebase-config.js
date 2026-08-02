@@ -1,7 +1,7 @@
 // Firebase Configuration (Configured for Project: finearts-e0cac)
 
 const firebaseConfig = {
-  apiKey: "AIzaSyACErA8q3MXXeNvHgxyRyY9URyUBDBR_wA",
+  apiKey: "AQ.Ab8RN6IKdQG28vCas0JvgaE6sVpMsKyd63EO5w5OuuIgLC3DJQ",
   authDomain: "finearts-e0cac.firebaseapp.com",
   databaseURL: "https://finearts-e0cac-default-rtdb.firebaseio.com",
   projectId: "finearts-e0cac",
