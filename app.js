@@ -27,6 +27,8 @@ let firestoreListenerRegistered = false;
 let firestoreListenerUnsubscribe = null;
 let firebaseAuthReadyPromise = null;
 let currentFirebaseUser = null;
+let firestoreSyncHealthy = false;
+let lastFirestoreError = null;
 const API_TIMEOUT_MS = 1200;
 const OFFLINE_MODE_KEY = 'attendance_app_force_offline';
 
@@ -134,6 +136,7 @@ async function waitForFirebaseAuth() {
         if (user) {
           unsubscribe();
           currentFirebaseUser = user;
+          console.log('Firebase Auth state detected existing user', user.uid);
           resolve(user);
           return;
         }
@@ -142,9 +145,11 @@ async function waitForFirebaseAuth() {
           const result = await auth.signInAnonymously();
           unsubscribe();
           currentFirebaseUser = result?.user || null;
+          console.log('Firebase anonymous auth succeeded', currentFirebaseUser?.uid);
           resolve(currentFirebaseUser);
         } catch (error) {
           unsubscribe();
+          console.warn('Firebase anonymous auth failed:', error.message);
           reject(error);
         }
       }, reject);
@@ -194,10 +199,14 @@ async function registerFirestoreListener() {
       const val = doc.data();
       if (val && (val.users || val.students || val.attendance || val.departments || val.sections || val.teams)) {
         appData = getMergedAppData(val);
-        console.log('Firestore sync update received');
+        firestoreSyncHealthy = true;
+        lastFirestoreError = null;
+        console.log('Firestore sync update received', { users: appData.users.length, students: appData.students.length, attendance: appData.attendance.length });
         if (currentUser) renderAllViews();
       }
     }, (error) => {
+      firestoreSyncHealthy = false;
+      lastFirestoreError = error;
       console.warn('Firestore listener error:', error.message);
     });
   } catch (e) {
@@ -215,9 +224,10 @@ async function loadAppData() {
       const val = snapshot.data();
       if (val && (val.users || val.students || val.attendance || val.departments || val.sections || val.teams)) {
         appData = getMergedAppData(val);
-        console.log('Data loaded successfully from Firestore');
+        console.log('Data loaded successfully from Firestore', { source: 'firestore', count: { users: appData.users.length, students: appData.students.length, attendance: appData.attendance.length } });
         return;
       }
+      console.warn('Firestore document exists but has no expected app data structure. Using local fallback.');
     } catch (err) {
       console.warn('Firestore load warning:', err.message);
     }
@@ -236,14 +246,21 @@ async function saveAppData() {
 
   const remoteSyncEnabled = localStorage.getItem(OFFLINE_MODE_KEY) !== 'true' && (typeof navigator === 'undefined' || navigator.onLine !== false);
 
-  if (!remoteSyncEnabled || !firestoreDb) return;
+  if (!remoteSyncEnabled || !firestoreDb) {
+    if (!remoteSyncEnabled) console.log('Remote sync disabled, skipping Firestore save.');
+    return;
+  }
 
   try {
     await waitForFirebaseAuth();
     const docRef = getFirestoreDocRef();
     await withTimeout(docRef.set(appData));
-    console.log('Saved successfully to Firestore');
+    firestoreSyncHealthy = true;
+    lastFirestoreError = null;
+    console.log('Saved successfully to Firestore', { users: appData.users.length, students: appData.students.length, attendance: appData.attendance.length });
   } catch (err) {
+    firestoreSyncHealthy = false;
+    lastFirestoreError = err;
     console.warn('Firestore save warning:', err.message);
   }
 }
@@ -568,7 +585,14 @@ function renderSettingsTab() {
   const roleLabel = currentUser?.role ? currentUser.role.toUpperCase() : 'GUEST';
   const onlineStatus = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
   const offlineForced = localStorage.getItem(OFFLINE_MODE_KEY) === 'true';
-  const syncText = offlineForced || !onlineStatus ? 'Offline cache active' : 'Online sync active';
+  let syncText = 'Online sync active';
+  if (offlineForced) {
+    syncText = 'Offline cache active';
+  } else if (!onlineStatus) {
+    syncText = 'No network connection';
+  } else if (!firestoreSyncHealthy) {
+    syncText = 'Cloud sync unavailable';
+  }
 
   const roleEl = document.getElementById('settingsRoleLabel');
   if (roleEl) roleEl.textContent = roleLabel;
