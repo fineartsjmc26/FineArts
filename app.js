@@ -216,7 +216,10 @@ async function registerFirestoreListener() {
 
 // Load Application Data
 async function loadAppData() {
-  if (firestoreDb) {
+  const isOnline = typeof navigator !== 'undefined' && navigator.onLine !== false;
+  const offlineForced = localStorage.getItem(OFFLINE_MODE_KEY) === 'true';
+
+  if (firestoreDb && isOnline && !offlineForced) {
     try {
       await waitForFirebaseAuth();
       const docRef = getFirestoreDocRef();
@@ -224,19 +227,27 @@ async function loadAppData() {
       const val = snapshot.data();
       if (val && (val.users || val.students || val.attendance || val.departments || val.sections || val.teams)) {
         appData = getMergedAppData(val);
+        firestoreSyncHealthy = true;
+        lastFirestoreError = null;
         console.log('Data loaded successfully from Firestore', { source: 'firestore', count: { users: appData.users.length, students: appData.students.length, attendance: appData.attendance.length } });
         return;
       }
-      console.warn('Firestore document exists but has no expected app data structure. Using local fallback.');
+      firestoreSyncHealthy = false;
+      console.warn('Firestore document exists but has no expected app data structure. Not using local fallback while online.');
     } catch (err) {
+      firestoreSyncHealthy = false;
+      lastFirestoreError = err;
       console.warn('Firestore load warning:', err.message);
     }
   }
 
-  const local = localStorage.getItem('attendance_app_data');
-  if (local) {
-    const localData = JSON.parse(local);
-    appData = getMergedAppData(localData);
+  if (!isOnline || offlineForced) {
+    const local = localStorage.getItem('attendance_app_data');
+    if (local) {
+      const localData = JSON.parse(local);
+      appData = getMergedAppData(localData);
+      console.log('Loaded fallback data from localStorage', { users: appData.users.length, students: appData.students.length, attendance: appData.attendance.length });
+    }
   }
 }
 
