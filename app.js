@@ -1,4 +1,4 @@
-// Complete Application Logic Connected to Firebase Realtime Database (finearts-e0cac) + Calendar Date Viewer
+// Complete Application Logic Connected to Firebase Firestore (finearts-e0cac) + Calendar Date Viewer
 
 // Application State
 const defaultAppData = {
@@ -21,10 +21,13 @@ const defaultAppData = {
 let appData = JSON.parse(JSON.stringify(defaultAppData));
 let currentUser = null;
 let currentTabId = 'dashboardTab';
-let rtdb = null;
 let firestoreDb = null;
+let auth = null;
+let firestoreListenerRegistered = false;
+let firestoreListenerUnsubscribe = null;
+let firebaseAuthReadyPromise = null;
+let currentFirebaseUser = null;
 const API_TIMEOUT_MS = 1200;
-const API_URLS = ['http://127.0.0.1:8000/api/data', '/api/data'];
 const OFFLINE_MODE_KEY = 'attendance_app_force_offline';
 
 function withTimeout(promise, timeoutMs = API_TIMEOUT_MS) {
@@ -113,77 +116,110 @@ function getMergedAppData(source) {
   return { ...defaultAppData, ...merged, ...source };
 }
 
-// Initialize Firebase Realtime Database
-function initFirebase() {
-  if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
-    try {
-      rtdb = firebase.database();
-      firestoreDb = typeof firebase.firestore === 'function' ? firebase.firestore() : null;
-      console.log("🔥 Connected to Firebase Realtime Database (finearts-e0cac)");
+// Initialize Firebase Auth + Firestore
+function getFirestoreDocRef() {
+  if (!firestoreDb) return null;
+  return firestoreDb.collection('attendance_master_data').doc('appData');
+}
 
-      if (firestoreDb && typeof firestoreDb.enablePersistence === 'function') {
-        firestoreDb.enablePersistence({ synchronizeTabs: true }).catch(() => {
-          console.warn("Firestore persistence could not be enabled in this browser session.");
-        });
-      }
+async function waitForFirebaseAuth() {
+  if (currentFirebaseUser) return currentFirebaseUser;
+  if (!auth) {
+    throw new Error('Firebase Authentication is unavailable for this browser session.');
+  }
 
-      rtdb.ref("attendance_master_data").on("value", (snapshot) => {
-        const val = snapshot.val();
-        if (val && val.users) {
-          appData = getMergedAppData(val);
-          console.log("🔥 Real-time sync update received from Firebase!");
-          if (currentUser) renderAllViews();
+  if (!firebaseAuthReadyPromise) {
+    firebaseAuthReadyPromise = new Promise((resolve, reject) => {
+      const unsubscribe = auth.onAuthStateChanged(async (user) => {
+        if (user) {
+          unsubscribe();
+          currentFirebaseUser = user;
+          resolve(user);
+          return;
         }
+
+        try {
+          const result = await auth.signInAnonymously();
+          unsubscribe();
+          currentFirebaseUser = result?.user || null;
+          resolve(currentFirebaseUser);
+        } catch (error) {
+          unsubscribe();
+          reject(error);
+        }
+      }, reject);
+    });
+  }
+
+  return firebaseAuthReadyPromise;
+}
+
+function initFirebase() {
+  if (window.__attendanceFirebaseInitialized) return;
+  window.__attendanceFirebaseInitialized = true;
+
+  if (typeof firebase === 'undefined' || !firebase.apps || firebase.apps.length === 0) {
+    console.warn('Firebase SDK is not available. Firestore data sync is disabled.');
+    return;
+  }
+
+  try {
+    auth = typeof firebase.auth === 'function' ? firebase.auth() : null;
+    firestoreDb = typeof firebase.firestore === 'function' ? firebase.firestore() : null;
+
+    if (firestoreDb && typeof firestoreDb.enablePersistence === 'function') {
+      firestoreDb.enablePersistence({ synchronizeTabs: true }).catch(() => {
+        console.warn('Firestore persistence could not be enabled in this browser session.');
       });
-    } catch (e) {
-      console.warn("Firebase initialization error:", e.message);
     }
+
+    if (firestoreDb) {
+      registerFirestoreListener();
+    }
+  } catch (e) {
+    console.warn('Firebase initialization error:', e.message);
+  }
+}
+
+async function registerFirestoreListener() {
+  if (firestoreListenerRegistered || !firestoreDb) return;
+
+  try {
+    await waitForFirebaseAuth();
+    const docRef = getFirestoreDocRef();
+    if (!docRef) return;
+
+    firestoreListenerRegistered = true;
+    firestoreListenerUnsubscribe = docRef.onSnapshot((doc) => {
+      const val = doc.data();
+      if (val && (val.users || val.students || val.attendance || val.departments || val.sections || val.teams)) {
+        appData = getMergedAppData(val);
+        console.log('Firestore sync update received');
+        if (currentUser) renderAllViews();
+      }
+    }, (error) => {
+      console.warn('Firestore listener error:', error.message);
+    });
+  } catch (e) {
+    console.warn('Firestore listener setup failed:', e.message);
   }
 }
 
 // Load Application Data
 async function loadAppData() {
-  if (rtdb) {
-    try {
-      const snapshot = await withTimeout(rtdb.ref("attendance_master_data").once("value"));
-      const val = snapshot.val();
-      if (val && val.users) {
-        appData = getMergedAppData(val);
-        console.log("Data loaded successfully from Firebase Cloud Database (finearts-e0cac)");
-        return;
-      }
-    } catch (err) {
-      console.warn("Firebase load warning:", err.message);
-    }
-  }
-
   if (firestoreDb) {
     try {
-      const snapshot = await withTimeout(firestoreDb.collection('attendance_master_data').doc('appData').get());
+      await waitForFirebaseAuth();
+      const docRef = getFirestoreDocRef();
+      const snapshot = await withTimeout(docRef.get());
       const val = snapshot.data();
-      if (val && val.users) {
+      if (val && (val.users || val.students || val.attendance || val.departments || val.sections || val.teams)) {
         appData = getMergedAppData(val);
-        console.log("Data loaded successfully from Firestore");
+        console.log('Data loaded successfully from Firestore');
         return;
       }
     } catch (err) {
-      console.warn("Firestore load warning:", err.message);
-    }
-  }
-
-  for (const apiUrl of API_URLS) {
-    try {
-      const res = await withTimeout(fetch(apiUrl));
-      if (res.ok) {
-        const serverData = await res.json();
-        if (serverData && serverData.users) {
-          appData = getMergedAppData(serverData);
-          console.log("Data loaded from Local Server");
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn("Local server load warning:", err.message);
+      console.warn('Firestore load warning:', err.message);
     }
   }
 
@@ -200,36 +236,15 @@ async function saveAppData() {
 
   const remoteSyncEnabled = localStorage.getItem(OFFLINE_MODE_KEY) !== 'true' && (typeof navigator === 'undefined' || navigator.onLine !== false);
 
-  if (rtdb && remoteSyncEnabled) {
-    try {
-      await withTimeout(rtdb.ref("attendance_master_data").set(appData));
-      console.log("Saved successfully to Firebase Cloud Database (finearts-e0cac)");
-    } catch (err) {
-      console.warn("Firebase save warning:", err.message);
-    }
-  }
+  if (!remoteSyncEnabled || !firestoreDb) return;
 
-  if (firestoreDb && remoteSyncEnabled) {
-    try {
-      await withTimeout(firestoreDb.collection('attendance_master_data').doc('appData').set(appData));
-      console.log("Saved successfully to Firestore");
-    } catch (err) {
-      console.warn("Firestore save warning:", err.message);
-    }
-  }
-
-  for (const apiUrl of API_URLS) {
-    try {
-      await withTimeout(fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(appData)
-      }));
-      console.log("Data saved to Local Server");
-      break;
-    } catch (err) {
-      console.warn("Local server save warning:", err.message);
-    }
+  try {
+    await waitForFirebaseAuth();
+    const docRef = getFirestoreDocRef();
+    await withTimeout(docRef.set(appData));
+    console.log('Saved successfully to Firestore');
+  } catch (err) {
+    console.warn('Firestore save warning:', err.message);
   }
 }
 

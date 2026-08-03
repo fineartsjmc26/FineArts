@@ -3,7 +3,6 @@
 const firebaseConfig = {
   apiKey: "AQ.Ab8RN6IKdQG28vCas0JvgaE6sVpMsKyd63EO5w5OuuIgLC3DJQ",
   authDomain: "finearts-e0cac.firebaseapp.com",
-  databaseURL: "https://finearts-e0cac-default-rtdb.firebaseio.com",
   projectId: "finearts-e0cac",
   storageBucket: "finearts-e0cac.firebasestorage.app",
   messagingSenderId: "539295589830",
@@ -13,5 +12,5 @@ const firebaseConfig = {
 // Initialize Firebase
 if (typeof firebase !== 'undefined') {
   firebase.initializeApp(firebaseConfig);
-  console.log("🔥 Firebase initialized for project finearts-e0cac!");
+  console.log('🔥 Firebase initialized for project finearts-e0cac!');
 }

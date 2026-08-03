@@ -17,6 +17,10 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "incharge";
     }
 
+    match /attendance_master_data/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
     // Students
     match /students/{studentId} {
       allow read: if isAdmin() || isIncharge();

@@ -31,13 +31,43 @@ global.document = {
 global.window = {};
 global.localStorage = { getItem() { return null; }, setItem() {} };
 global.sessionStorage = { getItem() { return null; }, setItem() {}, removeItem() {} };
-global.firebase = { apps: [], database() { return { ref() { return { once() { return Promise.resolve({ val() { return null; } }); }, on() {} }; } }; } };
+global.firebase = {
+  apps: [],
+  initializeApp() {},
+  auth() {
+    return {
+      onAuthStateChanged(callback) {
+        callback(null);
+        return () => {};
+      },
+      signInAnonymously() { return Promise.resolve({ user: { uid: 'anonymous' } }); },
+    };
+  },
+  firestore() {
+    return {
+      enablePersistence() { return Promise.resolve(); },
+      collection() {
+        return {
+          doc() {
+            return {
+              get() { return Promise.resolve({ data() { return { users: [{ id: 'u1', username: 'admin', password: 'admin123', role: 'admin', name: 'Admin' }], departments: ['CS'], sections: ['A'], teams: ['T1'], students: [], attendance: [] }; } }); },
+              set() { return Promise.resolve(); },
+              onSnapshot() { return () => {}; },
+            };
+          },
+        };
+      },
+    };
+  },
+};
 global.XLSX = { utils: { json_to_sheet() { return {}; }, book_new() { return {}; }, book_append_sheet() {} }, writeFile() {} };
 global.alert = () => {};
 
+global.fetch = async () => { throw new Error('unexpected fetch'); };
+
 require('../app.js');
 
-const { getSortedFilteredAttendanceRows } = global;
+const { getSortedFilteredAttendanceRows, loadAppData } = global;
 
 const originalAppData = global.appData;
 const originalStudents = global.appData?.students;
@@ -80,6 +110,10 @@ try {
 
   const result = getSortedFilteredAttendanceRows();
   assert.deepStrictEqual(result.rowList.map(record => record.teamName), ['Team Beta', 'Team Delta', 'Team Alpha', 'Team Gamma']);
+
+  const appDataSnapshot = await loadAppData();
+  assert.ok(appDataSnapshot === undefined || appDataSnapshot === null || typeof appDataSnapshot === 'undefined');
+
   console.log('attendance-order test passed');
 } finally {
   global.appData = originalAppData;
