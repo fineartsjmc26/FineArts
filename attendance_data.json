@@ -2,17 +2,17 @@
   "users": [
     {
       "id": "u1",
-      "username": "admin",
+      "name": "System Administrator",
       "password": "admin123",
       "role": "admin",
-      "name": "System Administrator"
+      "username": "admin"
     },
     {
       "id": "u2",
-      "username": "incharge1",
+      "name": "Student Incharge 1",
       "password": "user123",
       "role": "incharge",
-      "name": "Student Incharge 1"
+      "username": "incharge1"
     }
   ],
   "departments": [
@@ -32,53 +32,335 @@
     "Team Alpha",
     "Team Beta",
     "Team Gamma",
-    "Team Delta"
+    "Team Delta",
+    "Team Cena"
   ],
   "students": [
     {
-      "id": "s1",
-      "name": "John Doe",
-      "rollNumber": "21CS01",
-      "registerNumber": "910021104001",
-      "mobile": "9876543210",
       "department": "Aided",
       "deptName": "Computer Science",
+      "id": "s1",
+      "mobile": "9876543210",
+      "name": "John Doe",
+      "registerNumber": "910021104001",
+      "rollNumber": "21CS01",
       "section": "Section A",
       "teamId": "Team Alpha"
     },
     {
-      "id": "s2",
-      "name": "Jane Smith",
-      "rollNumber": "21CS02",
-      "registerNumber": "910021104002",
-      "mobile": "9876543211",
       "department": "Self-Finance",
       "deptName": "Information Technology",
+      "id": "s2",
+      "mobile": "9876543211",
+      "name": "Jane Smith",
+      "registerNumber": "910021104002",
+      "rollNumber": "21CS02",
       "section": "Section B",
       "teamId": "Team Alpha"
     },
     {
-      "id": "s3",
-      "name": "Robert Brown",
-      "rollNumber": "21CS03",
-      "registerNumber": "910021104003",
-      "mobile": "9876543212",
       "department": "Aided",
       "deptName": "Commerce",
+      "id": "s3",
+      "mobile": "9876543212",
+      "name": "Robert Brown",
+      "registerNumber": "910021104003",
+      "rollNumber": "21CS03",
       "section": "Section A",
       "teamId": "Team Beta"
     },
     {
-      "id": "s4",
-      "name": "Emily Davis",
-      "rollNumber": "21CS04",
-      "registerNumber": "910021104004",
-      "mobile": "9876543213",
       "department": "Self-Finance",
       "deptName": "Mathematics",
+      "id": "s4",
+      "mobile": "9876543213",
+      "name": "Emily Davis",
+      "registerNumber": "910021104004",
+      "rollNumber": "21CS04",
       "section": "Section C",
       "teamId": "Team Gamma"
+    },
+    {
+      "department": "Aided",
+      "deptName": "Computer Science",
+      "id": "s_1785732259625",
+      "mobile": "9876543210",
+      "name": "DHANUSH.S",
+      "registerNumber": "24UEN014",
+      "rollNumber": "24UA2216",
+      "section": "Section A",
+      "teamId": "Team Alpha"
+    },
+    {
+      "department": "Aided",
+      "deptName": "Computer Science",
+      "id": "s_1785732749543",
+      "mobile": "9999999999",
+      "name": "Test Student",
+      "registerNumber": "9900990001",
+      "rollNumber": "99TS01",
+      "section": "Section A",
+      "teamId": "Team Alpha"
+    },
+    {
+      "department": "Aided",
+      "deptName": "Computer Science",
+      "id": "s_1785732761013",
+      "mobile": "8888888888",
+      "name": "E2E Test Student",
+      "registerNumber": "9900990099",
+      "rollNumber": "99TS99",
+      "section": "Section A",
+      "teamId": "Team Alpha"
+    },
+    {
+      "department": "Aided",
+      "deptName": "Computer Science",
+      "id": "s_1785733195583",
+      "mobile": "8270650041",
+      "name": "thamish",
+      "registerNumber": "24us10407",
+      "rollNumber": "24uai007",
+      "section": "Section A",
+      "teamId": "Team Alpha"
+    },
+    {
+      "department": "Aided",
+      "deptName": "Computer Science",
+      "id": "s_1785733373314",
+      "mobile": "9999999999",
+      "name": "Temp User 1785733373313",
+      "registerNumber": "R1785733373313",
+      "rollNumber": "TMP1785733373313",
+      "section": "Section A",
+      "teamId": "Team Alpha"
+    },
+    {
+      "department": "Aided",
+      "deptName": "Computer Science",
+      "id": "s_1785733998305",
+      "mobile": "9999999999",
+      "name": "Temp User Save Test",
+      "registerNumber": "R999",
+      "rollNumber": "TMP999",
+      "section": "Section A",
+      "teamId": "Team Alpha"
+    },
+    {
+      "department": "Aided",
+      "deptName": "Computer Science",
+      "id": "s_1785734047305",
+      "mobile": "9999999999",
+      "name": "Temp User Save Test",
+      "registerNumber": "R999",
+      "rollNumber": "TMP999",
+      "section": "Section A",
+      "teamId": "Team Alpha"
+    },
+    {
+      "department": "Aided",
+      "deptName": "Computer Science",
+      "id": "s_1785734170314",
+      "mobile": "9999999999",
+      "name": "Temp User Save Test",
+      "registerNumber": "R999",
+      "rollNumber": "TMP999",
+      "section": "Section A",
+      "teamId": "Team Alpha"
+    },
+    {
+      "department": "Aided",
+      "deptName": "Computer Science",
+      "id": "s_1785734210313",
+      "mobile": "9999999999",
+      "name": "Temp User Save Test",
+      "registerNumber": "R999",
+      "rollNumber": "TMP999",
+      "section": "Section A",
+      "teamId": "Team Alpha"
+    },
+    {
+      "department": "Aided",
+      "deptName": "Computer Science",
+      "id": "s_1785734303381",
+      "mobile": "9999999990",
+      "name": "Save Test User",
+      "registerNumber": "R100",
+      "rollNumber": "TMP100",
+      "section": "Section A",
+      "teamId": "Team Alpha"
+    },
+    {
+      "department": "Aided",
+      "deptName": "Computer Science",
+      "id": "s_1785734340598",
+      "mobile": "9999999999",
+      "name": "Temp User Save Test",
+      "registerNumber": "R999",
+      "rollNumber": "TMP999",
+      "section": "Section A",
+      "teamId": "Team Alpha"
+    },
+    {
+      "department": "Aided",
+      "deptName": "Computer Science",
+      "id": "s_1785734470932",
+      "mobile": "9999999990",
+      "name": "Save Test User",
+      "registerNumber": "R100",
+      "rollNumber": "TMP100",
+      "section": "Section A",
+      "teamId": "Team Alpha"
+    },
+    {
+      "department": "Aided",
+      "deptName": "Computer Science",
+      "id": "s_1785734648346",
+      "mobile": "9999999990",
+      "name": "Temp User Save",
+      "registerNumber": "R100",
+      "rollNumber": "TMP100",
+      "section": "Section A",
+      "teamId": "Team Alpha"
+    },
+    {
+      "department": "Aided",
+      "deptName": "Computer Science",
+      "id": "s_1785735010153",
+      "mobile": "9999999990",
+      "name": "Temp User Save",
+      "registerNumber": "R100",
+      "rollNumber": "TMP100",
+      "section": "Section A",
+      "teamId": "Team Alpha"
+    },
+    {
+      "department": "Aided",
+      "deptName": "Computer Science",
+      "id": "s_1785735074379",
+      "mobile": "9999999990",
+      "name": "Temp User Save",
+      "registerNumber": "R100",
+      "rollNumber": "TMP100",
+      "section": "Section A",
+      "teamId": "Team Alpha"
+    },
+    {
+      "department": "Aided",
+      "deptName": "Computer Science",
+      "id": "s_1785735168504",
+      "mobile": "9999999990",
+      "name": "TMP User",
+      "registerNumber": "R100",
+      "rollNumber": "TMP100",
+      "section": "Section A",
+      "teamId": "Team Alpha"
     }
   ],
-  "attendance": []
+  "attendance": [
+    {
+      "date": "2026-08-03",
+      "id": "att_1785732882886",
+      "locked": true,
+      "markedBy": "System Administrator",
+      "studentAttendanceMap": {
+        "s1": {
+          "h1": "A",
+          "h2": "P",
+          "h3": "A",
+          "h4": "P",
+          "h5": "P"
+        },
+        "s2": {
+          "h1": "P",
+          "h2": "P",
+          "h3": "P",
+          "h4": "P",
+          "h5": "P"
+        },
+        "s_1785732259625": {
+          "h1": "A",
+          "h2": "A",
+          "h3": "P",
+          "h4": "P",
+          "h5": "A"
+        },
+        "s_1785732749543": {
+          "h1": "P",
+          "h2": "P",
+          "h3": "A",
+          "h4": "P",
+          "h5": "P"
+        },
+        "s_1785732761013": {
+          "h1": "P",
+          "h2": "P",
+          "h3": "P",
+          "h4": "P",
+          "h5": "P"
+        },
+        "s_1785733195583": {
+          "h1": "P",
+          "h2": "P",
+          "h3": "P",
+          "h4": "P",
+          "h5": "P"
+        },
+        "s_1785733373314": {
+          "h1": "P",
+          "h2": "P",
+          "h3": "P",
+          "h4": "P",
+          "h5": "P"
+        },
+        "s_1785733998305": {
+          "h1": "P",
+          "h2": "P",
+          "h3": "P",
+          "h4": "P",
+          "h5": "P"
+        },
+        "s_1785734047305": {
+          "h1": "P",
+          "h2": "P",
+          "h3": "P",
+          "h4": "P",
+          "h5": "P"
+        },
+        "s_1785734170314": {
+          "h1": "P",
+          "h2": "P",
+          "h3": "P",
+          "h4": "P",
+          "h5": "P"
+        },
+        "s_1785734210313": {
+          "h1": "P",
+          "h2": "P",
+          "h3": "P",
+          "h4": "P",
+          "h5": "P"
+        }
+      },
+      "teamId": "Team Alpha",
+      "timestamp": "2026-08-03T05:17:18.313Z"
+    },
+    {
+      "date": "2026-08-03",
+      "id": "att_1785734552281",
+      "locked": true,
+      "markedBy": "System Administrator",
+      "studentAttendanceMap": {
+        "s3": {
+          "h1": "P",
+          "h2": "P",
+          "h3": "P",
+          "h4": "P",
+          "h5": "P"
+        }
+      },
+      "teamId": "Team Beta",
+      "timestamp": "2026-08-03T05:22:32.281Z"
+    }
+  ]
 }

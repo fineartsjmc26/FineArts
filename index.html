@@ -87,11 +87,11 @@
             <span class="nav-icon"><svg data-lucide="key-round"></svg></span>
             <span class="nav-label">Manage Users</span>
           </button>
-          <button class="tab-btn" data-tab="recordsTab" type="button" aria-label="Open reports">
+          <button class="tab-btn" data-tab="reportsTab" type="button" aria-label="Open reports">
             <span class="nav-icon"><svg data-lucide="file-bar-chart"></svg></span>
             <span class="nav-label">Reports</span>
           </button>
-          <button class="tab-btn" data-tab="usersTab" type="button" aria-label="Open settings">
+          <button class="tab-btn" data-tab="settingsTab" type="button" aria-label="Open settings">
             <span class="nav-icon"><svg data-lucide="settings"></svg></span>
             <span class="nav-label">Settings</span>
           </button>
@@ -171,7 +171,7 @@
       </header>
 
       <!-- Login Section -->
-      <div class="auth-wrapper" id="authWrapper">
+      <div class="auth-wrapper hidden" id="authWrapper">
         <div class="card auth-card">
           <div style="text-align: center; margin-bottom: 1rem;">
             <div class="brand-logo" style="margin: 0 auto 1rem auto; width: 56px; height: 56px; font-size: 1.8rem;"><img src="img/unnamed.png" alt="Attendance Studio" class="logo-img" style="width:100%; height:100%; object-fit:cover; border-radius:12px;" /></div>
@@ -599,6 +599,66 @@
             </thead>
             <tbody id="usersTbody"></tbody>
           </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 8: REPORTS -->
+    <section id="reportsTab" class="tab-content hidden">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <h2>Attendance Reports</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem;">Export filtered attendance records and review performance snapshots.</p>
+          </div>
+          <button class="btn btn-success" id="exportExcelBtn">📥 Export Report</button>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total Sessions</div>
+            <div class="stat-val" id="reportTotalSessions">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Present Hours</div>
+            <div class="stat-val" style="color: var(--success);" id="reportPresentHours">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Absent Hours</div>
+            <div class="stat-val" style="color: var(--danger);" id="reportAbsentHours">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Attendance Rate</div>
+            <div class="stat-val" style="color: var(--primary);" id="reportRate">0%</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 9: SETTINGS -->
+    <section id="settingsTab" class="tab-content hidden">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <h2>Settings</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem;">Control synchronization, cache behavior, and the current session state.</p>
+          </div>
+          <span class="soft-pill" id="settingsConnectionBadge">Online sync active</span>
+        </div>
+
+        <div class="grid-2" style="gap: 1rem;">
+          <div class="card section-shell">
+            <p class="section-kicker">Current session</p>
+            <h3 id="settingsRoleLabel">ADMIN</h3>
+            <p style="margin-top: 0.5rem; color: var(--text-muted);" id="settingsSyncStatus">Online sync active</p>
+          </div>
+          <div class="card section-shell">
+            <p class="section-kicker">Offline / Sync</p>
+            <button class="btn btn-secondary" id="toggleOfflineModeBtn" type="button">Switch to Offline Cache</button>
+            <button class="btn btn-secondary" id="refreshCacheBtn" type="button" style="margin-top: 0.75rem;">Refresh Cache</button>
+            <button class="btn btn-danger" id="resetDemoDataBtn" type="button" style="margin-top: 0.75rem;">Reset Demo Data</button>
+            <button class="btn btn-primary" id="signOutFromSettingsBtn" type="button" style="margin-top: 0.75rem;">Sign Out</button>
+          </div>
         </div>
       </div>
     </section>

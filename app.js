@@ -20,8 +20,21 @@ const defaultAppData = {
 
 let appData = JSON.parse(JSON.stringify(defaultAppData));
 let currentUser = null;
+let currentTabId = 'dashboardTab';
 let rtdb = null;
-const API_URL = '/api/data';
+let firestoreDb = null;
+const API_TIMEOUT_MS = 1200;
+const API_URLS = ['http://127.0.0.1:8000/api/data', '/api/data'];
+const OFFLINE_MODE_KEY = 'attendance_app_force_offline';
+
+function withTimeout(promise, timeoutMs = API_TIMEOUT_MS) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
+    })
+  ]);
+}
 
 Object.defineProperty(globalThis, 'appData', {
   configurable: true,
@@ -35,12 +48,55 @@ Object.defineProperty(globalThis, 'appData', {
 });
 
 // Initialize Application
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.__attendanceAppInitialized) return;
+  window.__attendanceAppInitialized = true;
+
   initFirebase();
-  await loadAppData();
+
+  document.querySelectorAll('form').forEach(form => {
+    form.addEventListener('submit', (event) => {
+      if (!event.defaultPrevented) {
+        event.preventDefault();
+      }
+    });
+  });
+
+  const storedUser = sessionStorage.getItem('attendance_session_user');
+  if (storedUser) {
+    try {
+      currentUser = JSON.parse(storedUser);
+      showDashboard();
+    } catch (error) {
+      console.warn('Stored session is invalid, clearing it.', error.message);
+      sessionStorage.removeItem('attendance_session_user');
+      currentUser = null;
+    }
+  }
+
   initAuth();
   initUIEvents();
+  initUIVisibilityGuard();
   initPasswordToggles();
+
+  loadAppData().then(() => {
+    if (currentUser) {
+      renderAllViews();
+    } else {
+      document.getElementById('authWrapper')?.classList.remove('hidden');
+      document.getElementById('appHeader')?.classList.add('hidden');
+      document.getElementById('mainContainer')?.classList.add('hidden');
+      document.getElementById('appSidebar')?.classList.add('hidden');
+    }
+  }).catch(error => {
+    console.warn('Data load failed during startup:', error.message);
+    if (!currentUser) {
+      document.getElementById('authWrapper')?.classList.remove('hidden');
+      document.getElementById('appHeader')?.classList.add('hidden');
+      document.getElementById('mainContainer')?.classList.add('hidden');
+      document.getElementById('appSidebar')?.classList.add('hidden');
+    }
+  });
 });
 
 function getMergedAppData(source) {
@@ -62,7 +118,14 @@ function initFirebase() {
   if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
     try {
       rtdb = firebase.database();
+      firestoreDb = typeof firebase.firestore === 'function' ? firebase.firestore() : null;
       console.log("🔥 Connected to Firebase Realtime Database (finearts-e0cac)");
+
+      if (firestoreDb && typeof firestoreDb.enablePersistence === 'function') {
+        firestoreDb.enablePersistence({ synchronizeTabs: true }).catch(() => {
+          console.warn("Firestore persistence could not be enabled in this browser session.");
+        });
+      }
 
       rtdb.ref("attendance_master_data").on("value", (snapshot) => {
         const val = snapshot.val();
@@ -82,7 +145,7 @@ function initFirebase() {
 async function loadAppData() {
   if (rtdb) {
     try {
-      const snapshot = await rtdb.ref("attendance_master_data").once("value");
+      const snapshot = await withTimeout(rtdb.ref("attendance_master_data").once("value"));
       const val = snapshot.val();
       if (val && val.users) {
         appData = getMergedAppData(val);
@@ -94,18 +157,34 @@ async function loadAppData() {
     }
   }
 
-  try {
-    const res = await fetch(API_URL);
-    if (res.ok) {
-      const serverData = await res.json();
-      if (serverData && serverData.users) {
-        appData = getMergedAppData(serverData);
-        console.log("Data loaded from Local Server");
+  if (firestoreDb) {
+    try {
+      const snapshot = await withTimeout(firestoreDb.collection('attendance_master_data').doc('appData').get());
+      const val = snapshot.data();
+      if (val && val.users) {
+        appData = getMergedAppData(val);
+        console.log("Data loaded successfully from Firestore");
         return;
       }
+    } catch (err) {
+      console.warn("Firestore load warning:", err.message);
     }
-  } catch (err) {
-    console.warn("Local server load warning:", err.message);
+  }
+
+  for (const apiUrl of API_URLS) {
+    try {
+      const res = await withTimeout(fetch(apiUrl));
+      if (res.ok) {
+        const serverData = await res.json();
+        if (serverData && serverData.users) {
+          appData = getMergedAppData(serverData);
+          console.log("Data loaded from Local Server");
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("Local server load warning:", err.message);
+    }
   }
 
   const local = localStorage.getItem('attendance_app_data');
@@ -119,23 +198,38 @@ async function loadAppData() {
 async function saveAppData() {
   localStorage.setItem('attendance_app_data', JSON.stringify(appData));
 
-  if (rtdb) {
+  const remoteSyncEnabled = localStorage.getItem(OFFLINE_MODE_KEY) !== 'true' && (typeof navigator === 'undefined' || navigator.onLine !== false);
+
+  if (rtdb && remoteSyncEnabled) {
     try {
-      await rtdb.ref("attendance_master_data").set(appData);
+      await withTimeout(rtdb.ref("attendance_master_data").set(appData));
       console.log("Saved successfully to Firebase Cloud Database (finearts-e0cac)");
     } catch (err) {
       console.warn("Firebase save warning:", err.message);
     }
   }
 
-  try {
-    await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(appData)
-    });
-  } catch (err) {
-    console.warn("Local server save warning:", err.message);
+  if (firestoreDb && remoteSyncEnabled) {
+    try {
+      await withTimeout(firestoreDb.collection('attendance_master_data').doc('appData').set(appData));
+      console.log("Saved successfully to Firestore");
+    } catch (err) {
+      console.warn("Firestore save warning:", err.message);
+    }
+  }
+
+  for (const apiUrl of API_URLS) {
+    try {
+      await withTimeout(fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(appData)
+      }));
+      console.log("Data saved to Local Server");
+      break;
+    } catch (err) {
+      console.warn("Local server save warning:", err.message);
+    }
   }
 }
 
@@ -182,12 +276,6 @@ function initAuth() {
     document.getElementById('loginForm').reset();
     document.querySelectorAll('.profile-menu.show').forEach(el => el.classList.remove('show'));
   });
-
-  const storedUser = sessionStorage.getItem('attendance_session_user');
-  if (storedUser) {
-    currentUser = JSON.parse(storedUser);
-    showDashboard();
-  }
 }
 
 function showDashboard() {
@@ -218,6 +306,51 @@ function showDashboard() {
 }
 
 // Navigation & Events
+function initUIVisibilityGuard() {
+  const authWrapper = document.getElementById('authWrapper');
+  const appHeader = document.getElementById('appHeader');
+  const mainContainer = document.getElementById('mainContainer');
+  const appSidebar = document.getElementById('appSidebar');
+  if (!authWrapper || !appHeader || !mainContainer || !appSidebar) return;
+
+  const guard = () => {
+    if (currentUser) {
+      authWrapper.classList.add('hidden');
+      appHeader.classList.remove('hidden');
+      mainContainer.classList.remove('hidden');
+      appSidebar.classList.remove('hidden');
+    } else {
+      authWrapper.classList.remove('hidden');
+      appHeader.classList.add('hidden');
+      mainContainer.classList.add('hidden');
+      appSidebar.classList.add('hidden');
+    }
+  };
+
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach(m => {
+      const target = m.target;
+      if (target.id === 'authWrapper' || target.id === 'appHeader' || target.id === 'mainContainer' || target.id === 'appSidebar') {
+        if (currentUser && target.id === 'authWrapper' && !target.classList.contains('hidden')) {
+          authWrapper.classList.add('hidden');
+        }
+        if (!currentUser && target.id !== 'authWrapper' && !target.classList.contains('hidden')) {
+          appHeader.classList.add('hidden');
+          mainContainer.classList.add('hidden');
+          appSidebar.classList.add('hidden');
+        }
+      }
+    });
+  });
+
+  observer.observe(authWrapper, { attributes: true, attributeFilter: ['class'] });
+  observer.observe(appHeader, { attributes: true, attributeFilter: ['class'] });
+  observer.observe(mainContainer, { attributes: true, attributeFilter: ['class'] });
+  observer.observe(appSidebar, { attributes: true, attributeFilter: ['class'] });
+
+  guard();
+}
+
 function initUIEvents() {
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -225,15 +358,19 @@ function initUIEvents() {
         document.getElementById('logoutBtn').click();
         return;
       }
-      switchToTab(btn.dataset.tab);
-      renderAllViews();
+      if (btn.dataset.tab) {
+        switchToTab(btn.dataset.tab);
+        renderVisibleTab();
+      }
     });
   });
 
   document.querySelectorAll('[data-tab-quick]').forEach(btn => {
     btn.addEventListener('click', () => {
-      switchToTab(btn.dataset.tabQuick);
-      renderAllViews();
+      if (btn.dataset.tabQuick) {
+        switchToTab(btn.dataset.tabQuick);
+        renderVisibleTab();
+      }
     });
   });
 
@@ -294,10 +431,54 @@ function initUIEvents() {
       document.querySelectorAll('.profile-menu.show').forEach(el => el.classList.remove('show'));
     }
   });
+
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('online', () => renderSettingsTab());
+    window.addEventListener('offline', () => renderSettingsTab());
+  }
+
+  const toggleOfflineModeBtn = document.getElementById('toggleOfflineModeBtn');
+  if (toggleOfflineModeBtn) {
+    toggleOfflineModeBtn.addEventListener('click', () => {
+      const currentValue = localStorage.getItem(OFFLINE_MODE_KEY) === 'true';
+      localStorage.setItem(OFFLINE_MODE_KEY, String(!currentValue));
+      renderSettingsTab();
+    });
+  }
+
+  const refreshCacheBtn = document.getElementById('refreshCacheBtn');
+  if (refreshCacheBtn) {
+    refreshCacheBtn.addEventListener('click', async () => {
+      await loadAppData();
+      renderAllViews();
+      renderSettingsTab();
+    });
+  }
+
+  const resetDemoDataBtn = document.getElementById('resetDemoDataBtn');
+  if (resetDemoDataBtn) {
+    resetDemoDataBtn.addEventListener('click', async () => {
+      if (!confirm('Reset all local demo data and return to the default sample records?')) return;
+      appData = JSON.parse(JSON.stringify(defaultAppData));
+      await saveAppData();
+      renderAllViews();
+      renderSettingsTab();
+    });
+  }
+
+  const signOutFromSettingsBtn = document.getElementById('signOutFromSettingsBtn');
+  if (signOutFromSettingsBtn) {
+    signOutFromSettingsBtn.addEventListener('click', () => {
+      document.getElementById('logoutBtn').click();
+    });
+  }
 }
 
 // Keep the new premium shell and legacy sections in sync without changing app behavior.
 function switchToTab(tabId) {
+  if (!tabId) return;
+  currentTabId = tabId;
+
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
 
@@ -314,6 +495,30 @@ function switchToTab(tabId) {
   }
 }
 
+function renderVisibleTab() {
+  if (currentTabId === 'dashboardTab') {
+    renderDashboardOverview();
+  } else if (currentTabId === 'markTab') {
+    renderAttendanceMarkingForm();
+  } else if (currentTabId === 'recordsTab') {
+    renderRecordsTable();
+  } else if (currentTabId === 'studentsTab') {
+    renderStudentsTable();
+  } else if (currentTabId === 'deptsTab') {
+    renderDeptsTags();
+  } else if (currentTabId === 'sectionsTab') {
+    renderSectionsTags();
+  } else if (currentTabId === 'teamsTab') {
+    renderTeamsTags();
+  } else if (currentTabId === 'usersTab') {
+    renderUsersTable();
+  } else if (currentTabId === 'reportsTab') {
+    renderReportsTab();
+  } else if (currentTabId === 'settingsTab') {
+    renderSettingsTab();
+  }
+}
+
 function renderAllViews() {
   populateDropdowns();
   renderDashboardOverview();
@@ -324,6 +529,45 @@ function renderAllViews() {
   renderSectionsTags();
   renderTeamsTags();
   renderUsersTable();
+  renderReportsTab();
+  renderSettingsTab();
+  renderVisibleTab();
+}
+
+function renderReportsTab() {
+  const { rowList, totalHoursCount, presentHoursCount, absentHoursCount } = getSortedFilteredAttendanceRows();
+  const rate = totalHoursCount > 0 ? ((presentHoursCount / totalHoursCount) * 100).toFixed(1) + '%' : '0%';
+
+  const setText = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
+
+  setText('reportTotalSessions', rowList.length);
+  setText('reportPresentHours', presentHoursCount);
+  setText('reportAbsentHours', absentHoursCount);
+  setText('reportRate', rate);
+}
+
+function renderSettingsTab() {
+  const roleLabel = currentUser?.role ? currentUser.role.toUpperCase() : 'GUEST';
+  const onlineStatus = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+  const offlineForced = localStorage.getItem(OFFLINE_MODE_KEY) === 'true';
+  const syncText = offlineForced || !onlineStatus ? 'Offline cache active' : 'Online sync active';
+
+  const roleEl = document.getElementById('settingsRoleLabel');
+  if (roleEl) roleEl.textContent = roleLabel;
+
+  const syncEl = document.getElementById('settingsSyncStatus');
+  if (syncEl) syncEl.textContent = syncText;
+
+  const toggleOfflineModeBtn = document.getElementById('toggleOfflineModeBtn');
+  if (toggleOfflineModeBtn) {
+    toggleOfflineModeBtn.textContent = offlineForced ? 'Enable Live Sync' : 'Switch to Offline Cache';
+  }
+
+  const connectionBadge = document.getElementById('settingsConnectionBadge');
+  if (connectionBadge) connectionBadge.textContent = syncText;
 }
 
 // Populate the redesigned dashboard cards from the existing appData structure.
@@ -821,7 +1065,11 @@ async function handleSaveStudent(e) {
 
   await saveAppData();
   closeModal('studentModal');
-  renderAllViews();
+  renderStudentsTable();
+  renderDashboardOverview();
+  renderReportsTab();
+  renderSettingsTab();
+  renderVisibleTab();
 }
 
 async function deleteStudent(studentId) {
@@ -852,7 +1100,11 @@ async function handleAddDept(e) {
     appData.departments.push(name);
     await saveAppData();
     input.value = '';
-    renderAllViews();
+    populateDropdowns();
+    renderDeptsTags();
+    renderStudentsTable();
+    renderDashboardOverview();
+    renderVisibleTab();
   }
 }
 
@@ -861,7 +1113,11 @@ async function removeDept(deptName) {
   if (confirm(`Remove Department "${deptName}"?`)) {
     appData.departments = appData.departments.filter(d => d !== deptName);
     await saveAppData();
-    renderAllViews();
+    populateDropdowns();
+    renderDeptsTags();
+    renderStudentsTable();
+    renderDashboardOverview();
+    renderVisibleTab();
   }
 }
 
@@ -884,7 +1140,9 @@ async function handleAddSection(e) {
     appData.sections.push(name);
     await saveAppData();
     input.value = '';
-    renderAllViews();
+    populateDropdowns();
+    renderSectionsTags();
+    renderVisibleTab();
   }
 }
 
@@ -893,7 +1151,9 @@ async function removeSection(sectionName) {
   if (confirm(`Remove Section "${sectionName}"?`)) {
     appData.sections = appData.sections.filter(s => s !== sectionName);
     await saveAppData();
-    renderAllViews();
+    populateDropdowns();
+    renderSectionsTags();
+    renderVisibleTab();
   }
 }
 
@@ -916,7 +1176,9 @@ async function handleAddTeam(e) {
     appData.teams.push(tName);
     await saveAppData();
     input.value = '';
-    renderAllViews();
+    populateDropdowns();
+    renderTeamsTags();
+    renderVisibleTab();
   }
 }
 
@@ -925,7 +1187,11 @@ async function removeTeam(tName) {
   if (confirm(`Remove Team "${tName}"?`)) {
     appData.teams = appData.teams.filter(t => t !== tName);
     await saveAppData();
-    renderAllViews();
+    populateDropdowns();
+    renderTeamsTags();
+    renderStudentsTable();
+    renderDashboardOverview();
+    renderVisibleTab();
   }
 }
 
@@ -1015,7 +1281,9 @@ async function handleSaveUser(e) {
 
   await saveAppData();
   closeModal('userModal');
-  renderAllViews();
+  renderUsersTable();
+  renderSettingsTab();
+  renderVisibleTab();
 }
 
 async function removeUser(userId) {
