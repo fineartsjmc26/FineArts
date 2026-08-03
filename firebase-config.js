@@ -12,5 +12,5 @@ const firebaseConfig = {
 // Initialize Firebase
 if (typeof firebase !== 'undefined') {
   firebase.initializeApp(firebaseConfig);
-  console.log('🔥 Firebase initialized for project finearts-e0cac!');
+  console.log('🔥 Firebase initialized for project', firebaseConfig.projectId, 'authDomain', firebaseConfig.authDomain);
 }
