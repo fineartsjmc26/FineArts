@@ -484,17 +484,6 @@ function initUIEvents() {
     });
   }
 
-  const resetDemoDataBtn = document.getElementById('resetDemoDataBtn');
-  if (resetDemoDataBtn) {
-    resetDemoDataBtn.addEventListener('click', async () => {
-      if (!confirm('Reset all local demo data and return to the default sample records?')) return;
-      appData = JSON.parse(JSON.stringify(defaultAppData));
-      await saveAppData();
-      renderAllViews();
-      renderSettingsTab();
-    });
-  }
-
   const signOutFromSettingsBtn = document.getElementById('signOutFromSettingsBtn');
   if (signOutFromSettingsBtn) {
     signOutFromSettingsBtn.addEventListener('click', () => {
