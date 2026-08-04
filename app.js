@@ -404,6 +404,12 @@ function initUIEvents() {
   document.getElementById('markAllAbsentBtn').addEventListener('click', () => setAll5Hours('A'));
 
   document.getElementById('saveAttendanceBtn').addEventListener('click', handleSaveAttendance);
+  const saveAttendanceFab = document.getElementById('saveAttendanceFab');
+  if (saveAttendanceFab) {
+    saveAttendanceFab.addEventListener('click', () => {
+      handleSaveAttendance();
+    });
+  }
   document.getElementById('unlockBtn').addEventListener('click', handleUnlockAttendance);
 
   // Calendar Date Filter and Category Filters in Viewing Area
