@@ -1,12 +1,12 @@
 // Firebase Configuration (Configured for Project: finearts-e0cac)
 
 const firebaseConfig = {
-  apiKey: "AQ.Ab8RN6IKdQG28vCas0JvgaE6sVpMsKyd63EO5w5OuuIgLC3DJQ",
-  authDomain: "finearts-e0cac.firebaseapp.com",
-  projectId: "finearts-e0cac",
-  storageBucket: "finearts-e0cac.firebasestorage.app",
-  messagingSenderId: "539295589830",
-  appId: "1:539295589830:web:5807017ca6c3c20387fec7"
+  apiKey: "AIzaSyCBEY5VF7k3cXWqPSGRkhbM5Edw1oAqzJc",
+  authDomain: "fineartsattendence-c7fd687b.firebaseapp.com",
+  projectId: "fineartsattendence-c7fd687b",
+  storageBucket: "fineartsattendence-c7fd687b.firebasestorage.app",
+  messagingSenderId: "533898504157",
+  appId: "1:533898504157:web:7aee88373c8c68da7e3834"
 };
 
 // Initialize Firebase
