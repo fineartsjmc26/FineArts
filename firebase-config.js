@@ -1,4 +1,4 @@
-// Firebase Configuration (Configured for Project: finearts-e0cac)
+// Firebase Configuration for the active Firestore project
 
 const firebaseConfig = {
   apiKey: "AIzaSyCBEY5VF7k3cXWqPSGRkhbM5Edw1oAqzJc",

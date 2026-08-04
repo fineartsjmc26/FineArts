@@ -18,7 +18,7 @@ service cloud.firestore {
     }
 
     match /attendance_master_data/{docId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if true;
     }
 
     // Students

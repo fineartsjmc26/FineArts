@@ -1,4 +1,4 @@
-// Complete Application Logic Connected to Firebase Firestore (finearts-e0cac) + Calendar Date Viewer
+// Complete Application Logic Connected to Firebase Firestore for the configured app project
 
 // Application State
 const defaultAppData = {
@@ -22,14 +22,11 @@ let appData = JSON.parse(JSON.stringify(defaultAppData));
 let currentUser = null;
 let currentTabId = 'dashboardTab';
 let firestoreDb = null;
-let auth = null;
 let firestoreListenerRegistered = false;
 let firestoreListenerUnsubscribe = null;
-let firebaseAuthReadyPromise = null;
-let currentFirebaseUser = null;
 let firestoreSyncHealthy = false;
 let lastFirestoreError = null;
-const API_TIMEOUT_MS = 1200;
+const API_TIMEOUT_MS = 8000;
 const OFFLINE_MODE_KEY = 'attendance_app_force_offline';
 
 function withTimeout(promise, timeoutMs = API_TIMEOUT_MS) {
@@ -118,45 +115,10 @@ function getMergedAppData(source) {
   return { ...defaultAppData, ...merged, ...source };
 }
 
-// Initialize Firebase Auth + Firestore
+// Initialize Firestore
 function getFirestoreDocRef() {
   if (!firestoreDb) return null;
   return firestoreDb.collection('attendance_master_data').doc('appData');
-}
-
-async function waitForFirebaseAuth() {
-  if (currentFirebaseUser) return currentFirebaseUser;
-  if (!auth) {
-    throw new Error('Firebase Authentication is unavailable for this browser session.');
-  }
-
-  if (!firebaseAuthReadyPromise) {
-    firebaseAuthReadyPromise = new Promise((resolve, reject) => {
-      const unsubscribe = auth.onAuthStateChanged(async (user) => {
-        if (user) {
-          unsubscribe();
-          currentFirebaseUser = user;
-          console.log('Firebase Auth state detected existing user', user.uid);
-          resolve(user);
-          return;
-        }
-
-        try {
-          const result = await auth.signInAnonymously();
-          unsubscribe();
-          currentFirebaseUser = result?.user || null;
-          console.log('Firebase anonymous auth succeeded', currentFirebaseUser?.uid);
-          resolve(currentFirebaseUser);
-        } catch (error) {
-          unsubscribe();
-          console.warn('Firebase anonymous auth failed:', error.message);
-          reject(error);
-        }
-      }, reject);
-    });
-  }
-
-  return firebaseAuthReadyPromise;
 }
 
 function initFirebase() {
@@ -169,7 +131,6 @@ function initFirebase() {
   }
 
   try {
-    auth = typeof firebase.auth === 'function' ? firebase.auth() : null;
     firestoreDb = typeof firebase.firestore === 'function' ? firebase.firestore() : null;
 
     if (firestoreDb && typeof firestoreDb.enablePersistence === 'function') {
@@ -190,7 +151,6 @@ async function registerFirestoreListener() {
   if (firestoreListenerRegistered || !firestoreDb) return;
 
   try {
-    await waitForFirebaseAuth();
     const docRef = getFirestoreDocRef();
     if (!docRef) return;
 
@@ -221,7 +181,6 @@ async function loadAppData() {
 
   if (firestoreDb && isOnline && !offlineForced) {
     try {
-      await waitForFirebaseAuth();
       const docRef = getFirestoreDocRef();
       const snapshot = await withTimeout(docRef.get());
       const val = snapshot.data();
@@ -232,8 +191,18 @@ async function loadAppData() {
         console.log('Data loaded successfully from Firestore', { source: 'firestore', count: { users: appData.users.length, students: appData.students.length, attendance: appData.attendance.length } });
         return;
       }
+
+      if (!snapshot.exists) {
+        await withTimeout(docRef.set(JSON.parse(JSON.stringify(defaultAppData))));
+        console.log('Created Firestore document attendance_master_data/appData with default app data');
+        appData = JSON.parse(JSON.stringify(defaultAppData));
+        firestoreSyncHealthy = true;
+        lastFirestoreError = null;
+        return;
+      }
+
       firestoreSyncHealthy = false;
-      console.warn('Firestore document exists but has no expected app data structure. Not using local fallback while online.');
+      console.warn('Firestore document exists but has no expected app data structure.');
     } catch (err) {
       firestoreSyncHealthy = false;
       lastFirestoreError = err;
@@ -255,7 +224,12 @@ async function loadAppData() {
 async function saveAppData() {
   localStorage.setItem('attendance_app_data', JSON.stringify(appData));
 
+  const projectId = firebase?.app?.().options?.projectId || 'unknown';
   const remoteSyncEnabled = localStorage.getItem(OFFLINE_MODE_KEY) !== 'true' && (typeof navigator === 'undefined' || navigator.onLine !== false);
+
+  console.log('===== FIRESTORE SAVE START =====');
+  console.log('Project:', projectId);
+  console.log('Document: attendance_master_data/appData');
 
   if (!remoteSyncEnabled || !firestoreDb) {
     if (!remoteSyncEnabled) console.log('Remote sync disabled, skipping Firestore save.');
@@ -263,16 +237,22 @@ async function saveAppData() {
   }
 
   try {
-    await waitForFirebaseAuth();
     const docRef = getFirestoreDocRef();
-    await withTimeout(docRef.set(appData));
+    if (!docRef) {
+      throw new Error('Firestore document reference is unavailable');
+    }
+
+    await withTimeout(docRef.set(JSON.parse(JSON.stringify(appData))));
     firestoreSyncHealthy = true;
     lastFirestoreError = null;
-    console.log('Saved successfully to Firestore', { users: appData.users.length, students: appData.students.length, attendance: appData.attendance.length });
-  } catch (err) {
+    console.log('===== FIRESTORE SAVE SUCCESS =====');
+    console.log('Saved successfully to Firestore', { collection: 'attendance_master_data', document: 'appData' });
+  } catch (error) {
     firestoreSyncHealthy = false;
-    lastFirestoreError = err;
-    console.warn('Firestore save warning:', err.message);
+    lastFirestoreError = error;
+    console.error('===== FIRESTORE SAVE FAILED =====');
+    console.error(error);
+    throw error;
   }
 }
 
@@ -1060,7 +1040,7 @@ function renderStudentsTable() {
     tbody.appendChild(tr);
   });
 
-  if (currentUser.role !== 'admin') {
+  if (currentUser?.role !== 'admin') {
     document.querySelectorAll('.admin-only').forEach(el => el.classList.add('hidden'));
   }
 }

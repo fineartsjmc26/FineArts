@@ -34,15 +34,6 @@ global.sessionStorage = { getItem() { return null; }, setItem() {}, removeItem()
 global.firebase = {
   apps: [],
   initializeApp() {},
-  auth() {
-    return {
-      onAuthStateChanged(callback) {
-        callback(null);
-        return () => {};
-      },
-      signInAnonymously() { return Promise.resolve({ user: { uid: 'anonymous' } }); },
-    };
-  },
   firestore() {
     return {
       enablePersistence() { return Promise.resolve(); },
