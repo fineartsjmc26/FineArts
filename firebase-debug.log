@@ -1,0 +1,32 @@
+[debug] [2026-08-04T04:05:01.152Z] ----------------------------------------------------------------------
+[debug] [2026-08-04T04:05:01.156Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Administrator\AppData\Local\npm-cache\_npx\ba4f1959e38407b5\node_modules\firebase-tools\lib\bin\firebase.js deploy --only hosting --project fineartsattendence-c7fd687b
+[debug] [2026-08-04T04:05:01.157Z] CLI Version:   15.25.1
+[debug] [2026-08-04T04:05:01.157Z] Platform:      win32
+[debug] [2026-08-04T04:05:01.157Z] Node Version:  v20.20.2
+[debug] [2026-08-04T04:05:01.157Z] Detected Agent: github_copilot_vscode_agent
+[debug] [2026-08-04T04:05:01.157Z] Time:          Mon Aug 03 2026 21:05:01 GMT-0700 (Pacific Daylight Time)
+[debug] [2026-08-04T04:05:01.158Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-08-04T04:05:03.690Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-04T04:05:03.690Z] > authorizing via signed-in user (jmc.finearts26@gmail.com)
+[debug] [2026-08-04T04:05:03.691Z] [iam] checking project fineartsattendence-c7fd687b for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-08-04T04:05:03.692Z] Checked if tokens are valid: true, expires at: 1785819777015
+[debug] [2026-08-04T04:05:03.693Z] Checked if tokens are valid: true, expires at: 1785819777015
+[debug] [2026-08-04T04:05:03.694Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/fineartsattendence-c7fd687b:testIamPermissions [none]
+[debug] [2026-08-04T04:05:03.694Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/fineartsattendence-c7fd687b:testIamPermissions  x-goog-user-project=fineartsattendence-c7fd687b
+[debug] [2026-08-04T04:05:03.694Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/fineartsattendence-c7fd687b:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-08-04T04:05:05.377Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/fineartsattendence-c7fd687b:testIamPermissions 403
+[debug] [2026-08-04T04:05:05.378Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/fineartsattendence-c7fd687b:testIamPermissions {"error":{"code":403,"message":"Caller does not have required permission to use project fineartsattendence-c7fd687b. Grant the caller the roles/serviceusage.serviceUsageConsumer role, or a custom role with the serviceusage.services.use permission, by visiting https://console.developers.google.com/iam-admin/iam?project=fineartsattendence-c7fd687b and then retry. Propagation of the new permission may take a few minutes.","status":"PERMISSION_DENIED","details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"USER_PROJECT_DENIED","domain":"googleapis.com","metadata":{"containerInfo":"fineartsattendence-c7fd687b","consumer":"projects/fineartsattendence-c7fd687b","consoleUrl":"https://console.developers.google.com/iam-admin/iam?project=fineartsattendence-c7fd687b","service":"cloudresourcemanager.googleapis.com"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"Caller does not have required permission to use project fineartsattendence-c7fd687b. Grant the caller the roles/serviceusage.serviceUsageConsumer role, or a custom role with the serviceusage.services.use permission, by visiting https://console.developers.google.com/iam-admin/iam?project=fineartsattendence-c7fd687b and then retry. Propagation of the new permission may take a few minutes."},{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Google developer console IAM admin","url":"https://console.developers.google.com/iam-admin/iam?project=fineartsattendence-c7fd687b"}]}]}}
+[debug] [2026-08-04T04:05:05.379Z] [iam] error while checking permissions, command may fail: Request to https://cloudresourcemanager.googleapis.com/v1/projects/fineartsattendence-c7fd687b:testIamPermissions had HTTP Error: 403, Caller does not have required permission to use project fineartsattendence-c7fd687b. Grant the caller the roles/serviceusage.serviceUsageConsumer role, or a custom role with the serviceusage.services.use permission, by visiting https://console.developers.google.com/iam-admin/iam?project=fineartsattendence-c7fd687b and then retry. Propagation of the new permission may take a few minutes.
+[debug] [2026-08-04T04:05:05.380Z] Checked if tokens are valid: true, expires at: 1785819777015
+[debug] [2026-08-04T04:05:05.380Z] Checked if tokens are valid: true, expires at: 1785819777015
+[debug] [2026-08-04T04:05:05.380Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/fineartsattendence-c7fd687b [none]
+[debug] [2026-08-04T04:05:06.083Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/fineartsattendence-c7fd687b 403
+[debug] [2026-08-04T04:05:06.083Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/fineartsattendence-c7fd687b {"error":{"code":403,"message":"The caller does not have permission","status":"PERMISSION_DENIED"}}
+[debug] [2026-08-04T04:05:06.084Z] Request to https://firebase.googleapis.com/v1beta1/projects/fineartsattendence-c7fd687b had HTTP Error: 403, The caller does not have permission
+[debug] [2026-08-04T04:05:06.483Z] FirebaseError: Request to https://firebase.googleapis.com/v1beta1/projects/fineartsattendence-c7fd687b had HTTP Error: 403, The caller does not have permission
+    at responseToError (C:\Users\Administrator\AppData\Local\npm-cache\_npx\ba4f1959e38407b5\node_modules\firebase-tools\lib\responseToError.js:53:12)
+    at RetryOperation._fn (C:\Users\Administrator\AppData\Local\npm-cache\_npx\ba4f1959e38407b5\node_modules\firebase-tools\lib\apiv2.js:415:77)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+[error] 
+[error] Error: Failed to get Firebase project fineartsattendence-c7fd687b. Please make sure the project exists and your account has permission to access it.
