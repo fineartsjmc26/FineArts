@@ -1,0 +1,8 @@
+{
+  "name": "attendance-studio",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test tests/attendance-order.test.js"
+  }
+}
