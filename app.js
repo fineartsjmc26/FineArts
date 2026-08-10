@@ -7,13 +7,14 @@ const defaultAppData = {
     { id: "u2", username: "incharge1", password: "user123", role: "incharge", name: "Student Incharge 1" }
   ],
   departments: ["Computer Science", "Information Technology", "Electronics & Comm", "Commerce", "Mathematics"],
+  years: ["First Year", "Second Year", "Third Year", "Fourth Year"],
   sections: ["Section A", "Section B", "Section C", "Section D"],
   teams: ["Team Alpha", "Team Beta", "Team Gamma", "Team Delta"],
   students: [
-    { id: "s1", name: "John Doe", rollNumber: "21CS01", registerNumber: "910021104001", mobile: "9876543210", department: "Aided", deptName: "Computer Science", section: "Section A", teamId: "Team Alpha" },
-    { id: "s2", name: "Jane Smith", rollNumber: "21CS02", registerNumber: "910021104002", mobile: "9876543211", department: "Self-Finance", deptName: "Information Technology", section: "Section B", teamId: "Team Alpha" },
-    { id: "s3", name: "Robert Brown", rollNumber: "21CS03", registerNumber: "910021104003", mobile: "9876543212", department: "Aided", deptName: "Commerce", section: "Section A", teamId: "Team Beta" },
-    { id: "s4", name: "Emily Davis", rollNumber: "21CS04", registerNumber: "910021104004", mobile: "9876543213", department: "Self-Finance", deptName: "Mathematics", section: "Section C", teamId: "Team Gamma" }
+    { id: "s1", name: "John Doe", rollNumber: "21CS01", registerNumber: "910021104001", mobile: "9876543210", department: "Aided", deptName: "Computer Science", year: "First Year", section: "Section A", teamId: "Team Alpha" },
+    { id: "s2", name: "Jane Smith", rollNumber: "21CS02", registerNumber: "910021104002", mobile: "9876543211", department: "Self-Finance", deptName: "Information Technology", year: "Second Year", section: "Section B", teamId: "Team Alpha" },
+    { id: "s3", name: "Robert Brown", rollNumber: "21CS03", registerNumber: "910021104003", mobile: "9876543212", department: "Aided", deptName: "Commerce", year: "Third Year", section: "Section A", teamId: "Team Beta" },
+    { id: "s4", name: "Emily Davis", rollNumber: "21CS04", registerNumber: "910021104004", mobile: "9876543213", department: "Self-Finance", deptName: "Mathematics", year: "Fourth Year", section: "Section C", teamId: "Team Gamma" }
   ],
   attendance: []
 };
@@ -105,6 +106,7 @@ function getMergedAppData(source) {
   const merged = {
     users: Array.isArray(source?.users) && source.users.length ? source.users : defaultAppData.users,
     departments: Array.isArray(source?.departments) && source.departments.length ? source.departments : defaultAppData.departments,
+    years: Array.isArray(source?.years) && source.years.length ? source.years : defaultAppData.years,
     sections: Array.isArray(source?.sections) && source.sections.length ? source.sections : defaultAppData.sections,
     teams: Array.isArray(source?.teams) && source.teams.length ? source.teams : defaultAppData.teams,
     students: Array.isArray(source?.students) && source.students.length ? source.students : defaultAppData.students,
@@ -422,7 +424,7 @@ function initUIEvents() {
   document.getElementById('unlockBtn').addEventListener('click', handleUnlockAttendance);
 
   // Calendar Date Filter and Category Filters in Viewing Area
-  ['filterDate', 'filterTeam', 'filterDeptName', 'filterDept'].forEach(id => {
+  ['filterDate', 'filterTeam', 'filterDeptName', 'filterDept', 'filterYear', 'markCategoryFilter', 'markYearFilter'].forEach(id => {
     document.getElementById(id).addEventListener('change', renderRecordsTable);
   });
 
@@ -444,6 +446,7 @@ function initUIEvents() {
   document.getElementById('studentForm').addEventListener('submit', handleSaveStudent);
 
   document.getElementById('addDeptForm').addEventListener('submit', handleAddDept);
+  document.getElementById('addYearForm').addEventListener('submit', handleAddYear);
   document.getElementById('addSectionForm').addEventListener('submit', handleAddSection);
   document.getElementById('addTeamForm').addEventListener('submit', handleAddTeam);
 
@@ -533,6 +536,8 @@ function renderVisibleTab() {
     renderStudentsTable();
   } else if (currentTabId === 'deptsTab') {
     renderDeptsTags();
+  } else if (currentTabId === 'yearsTab') {
+    renderYearsTags();
   } else if (currentTabId === 'sectionsTab') {
     renderSectionsTags();
   } else if (currentTabId === 'teamsTab') {
@@ -553,6 +558,7 @@ function renderAllViews() {
   renderRecordsTable();
   renderStudentsTable();
   renderDeptsTags();
+  renderYearsTags();
   renderSectionsTags();
   renderTeamsTags();
   renderUsersTable();
@@ -666,6 +672,16 @@ function populateDropdowns() {
   const filterDeptName = document.getElementById('filterDeptName');
   filterDeptName.innerHTML = `<option value="ALL">All Department Names</option>` + appData.departments.map(d => `<option value="${d}">${d}</option>`).join('');
 
+  const yearOptions = appData.years.map(year => `<option value="${year}">${year}</option>`).join('');
+  const studentYear = document.getElementById('studentYear');
+  if (studentYear) studentYear.innerHTML = yearOptions;
+  const filterYear = document.getElementById('filterYear');
+  if (filterYear) filterYear.innerHTML = `<option value="ALL">All Years</option>` + yearOptions;
+  const markCategoryFilter = document.getElementById('markCategoryFilter');
+  if (markCategoryFilter) markCategoryFilter.innerHTML = '<option value="ALL">All Categories</option><option value="Aided">Aided</option><option value="Self-Finance">Self-Finance</option>';
+  const markYearFilter = document.getElementById('markYearFilter');
+  if (markYearFilter) markYearFilter.innerHTML = `<option value="ALL">All Years</option>` + yearOptions;
+
   const studentDeptName = document.getElementById('studentDeptName');
   studentDeptName.innerHTML = appData.departments.map(d => `<option value="${d}">${d}</option>`).join('');
 
@@ -707,13 +723,17 @@ function isStudentMarkedInAnotherTeam(studentId, date, teamId) {
 function renderAttendanceMarkingForm() {
   const teamId = document.getElementById('markTeamSelect').value;
   const date = document.getElementById('markDate').value;
+  const categoryFilter = document.getElementById('markCategoryFilter')?.value || 'ALL';
+  const yearFilter = document.getElementById('markYearFilter')?.value || 'ALL';
 
   const tbody = document.getElementById('attendanceMarkTbody');
   tbody.innerHTML = '';
 
   if (!teamId || !date) return;
 
-  const teamStudents = appData.students.filter(s => getStudentTeamIds(s).includes(teamId));
+  const teamStudents = appData.students.filter(s => getStudentTeamIds(s).includes(teamId)
+    && (categoryFilter === 'ALL' || s.department === categoryFilter)
+    && (yearFilter === 'ALL' || s.year === yearFilter));
   document.getElementById('teamStudentCountTitle').textContent = `Team Students (${teamStudents.length})`;
 
   const existingRecord = appData.attendance.find(a => a.teamId === teamId && a.date === date);
@@ -808,7 +828,11 @@ async function handleSaveAttendance() {
 
   const teamId = document.getElementById('markTeamSelect').value;
   const date = document.getElementById('markDate').value;
-  const teamStudents = appData.students.filter(s => getStudentTeamIds(s).includes(teamId));
+  const categoryFilter = document.getElementById('markCategoryFilter')?.value || 'ALL';
+  const yearFilter = document.getElementById('markYearFilter')?.value || 'ALL';
+  const teamStudents = appData.students.filter(s => getStudentTeamIds(s).includes(teamId)
+    && (categoryFilter === 'ALL' || s.department === categoryFilter)
+    && (yearFilter === 'ALL' || s.year === yearFilter));
 
   if (teamStudents.length === 0) {
     alert('No students to mark attendance for!');
@@ -921,6 +945,7 @@ function getSortedFilteredAttendanceRows() {
   const filterTeamVal = document.getElementById('filterTeam').value;
   const filterDeptNameVal = document.getElementById('filterDeptName').value;
   const filterDeptVal = document.getElementById('filterDept').value;
+  const filterYearVal = document.getElementById('filterYear')?.value || 'ALL';
 
   let rowList = [], totalHoursCount = 0, presentHoursCount = 0, absentHoursCount = 0;
 
@@ -936,6 +961,7 @@ function getSortedFilteredAttendanceRows() {
       if (filterTeamVal !== 'ALL' && att.teamId !== filterTeamVal) return;
       if (filterDeptNameVal !== 'ALL' && student.deptName !== filterDeptNameVal) return;
       if (filterDeptVal !== 'ALL' && student.department !== filterDeptVal) return;
+      if (filterYearVal !== 'ALL' && student.year !== filterYearVal) return;
 
       [hours.h1, hours.h2, hours.h3, hours.h4, hours.h5].forEach(st => {
         totalHoursCount++;
@@ -951,6 +977,7 @@ function getSortedFilteredAttendanceRows() {
         mobile: student.mobile,
         deptName: student.deptName || 'N/A',
         department: student.department,
+        year: student.year || 'N/A',
         section: student.section,
         h1: hours.h1 || 'P',
         h2: hours.h2 || 'P',
@@ -982,7 +1009,7 @@ function renderRecordsTable() {
   document.getElementById('statRate').textContent = rate;
 
   if (rowList.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="13" style="text-align: center; color: var(--text-muted); padding: 2rem;">No attendance records found matching selected date & filters.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" style="text-align: center; color: var(--text-muted); padding: 2rem;">No attendance records found matching selected date & filters.</td></tr>`;
     return;
   }
 
@@ -996,6 +1023,7 @@ function renderRecordsTable() {
       <td data-label="Register No">${r.registerNumber}</td>
       <td data-label="Dept Name">${r.deptName}</td>
       <td data-label="Category"><span class="badge ${r.department === 'Aided' ? 'badge-aided' : 'badge-self'}">${r.department}</span></td>
+      <td data-label="Year">${r.year}</td>
       <td data-label="H1" style="text-align: center;"><span class="pa-badge ${r.h1 === 'P' ? 'present' : 'absent'}">${r.h1}</span></td>
       <td data-label="H2" style="text-align: center;"><span class="pa-badge ${r.h2 === 'P' ? 'present' : 'absent'}">${r.h2}</span></td>
       <td data-label="H3" style="text-align: center;"><span class="pa-badge ${r.h3 === 'P' ? 'present' : 'absent'}">${r.h3}</span></td>
@@ -1022,6 +1050,7 @@ function exportToExcel() {
     'Mobile Number': row.mobile,
     'Department Name': row.deptName,
     'Department Category': row.department,
+    'Year': row.year,
     'Section': row.section,
     'Hour 1 (H1)': row.h1,
     'Hour 2 (H2)': row.h2,
@@ -1068,7 +1097,7 @@ function renderStudentsTable() {
   );
 
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 2rem;">No student records found.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 2rem;">No student records found.</td></tr>`;
     return;
   }
 
@@ -1081,6 +1110,7 @@ function renderStudentsTable() {
       <td data-label="Mobile">${s.mobile}</td>
       <td data-label="Dept Name">${s.deptName || 'Computer Science'}</td>
       <td data-label="Category"><span class="badge ${s.department === 'Aided' ? 'badge-aided' : 'badge-self'}">${s.department}</span></td>
+      <td data-label="Year">${s.year || 'N/A'}</td>
       <td data-label="Section">${s.section}</td>
       <td data-label="Team"><span style="font-size: 0.85rem; color: var(--primary); font-weight: 600;">${getStudentTeamIds(s).join(', ') || 'Team Alpha'}</span></td>
       <td data-label="Actions" class="admin-only">
@@ -1114,6 +1144,7 @@ function openStudentModal(studentId = null) {
       document.getElementById('studentMobile').value = s.mobile;
       document.getElementById('studentDeptName').value = s.deptName || appData.departments[0];
       document.getElementById('studentDept').value = s.department;
+      document.getElementById('studentYear').value = s.year || appData.years[0];
       document.getElementById('studentSection').value = s.section;
       const assignedTeamIds = getStudentTeamIds(s);
       Array.from(document.getElementById('studentTeam').options).forEach(option => {
@@ -1137,6 +1168,7 @@ async function handleSaveStudent(e) {
   const mobile = document.getElementById('studentMobile').value.trim();
   const deptName = document.getElementById('studentDeptName').value;
   const department = document.getElementById('studentDept').value;
+  const year = document.getElementById('studentYear').value;
   const section = document.getElementById('studentSection').value;
   const studentTeam = document.getElementById('studentTeam');
   const teamIds = Array.from(studentTeam.selectedOptions || [])
@@ -1144,7 +1176,7 @@ async function handleSaveStudent(e) {
     .filter(Boolean);
   const teamId = teamIds[0] || '';
 
-  const studentData = { id: id || 's_' + Date.now(), name, rollNumber, registerNumber, mobile, deptName, department, section, teamId, teamIds };
+  const studentData = { id: id || 's_' + Date.now(), name, rollNumber, registerNumber, mobile, deptName, department, year, section, teamId, teamIds };
 
   if (id) {
     const idx = appData.students.findIndex(s => s.id === id);
@@ -1220,6 +1252,42 @@ function renderSectionsTags() {
       <button class="tag-remove" onclick="removeSection('${sec}')">&times;</button>
     </div>
   `).join('');
+}
+
+function renderYearsTags() {
+  const container = document.getElementById('yearsTagList');
+  if (!container) return;
+  container.innerHTML = appData.years.map(year => `
+    <div class="tag-item">
+      <span>📚 ${year}</span>
+      <button class="tag-remove" onclick="removeYear('${year}')">&times;</button>
+    </div>
+  `).join('');
+}
+
+async function handleAddYear(e) {
+  e.preventDefault();
+  if (currentUser?.role !== 'admin') return;
+  const input = document.getElementById('newYearInput');
+  const name = input.value.trim();
+  if (name && !appData.years.includes(name)) {
+    appData.years.push(name);
+    await saveAppData();
+    input.value = '';
+    populateDropdowns();
+    renderYearsTags();
+  }
+}
+
+async function removeYear(yearName) {
+  if (currentUser?.role !== 'admin') return;
+  if (confirm(`Remove Year "${yearName}"?`)) {
+    appData.years = appData.years.filter(year => year !== yearName);
+    await saveAppData();
+    populateDropdowns();
+    renderYearsTags();
+    renderStudentsTable();
+  }
 }
 
 async function handleAddSection(e) {

@@ -73,6 +73,10 @@
             <span class="nav-icon"><svg data-lucide="building-2"></svg></span>
             <span class="nav-label">Departments</span>
           </button>
+          <button class="tab-btn admin-only" data-tab="yearsTab" type="button" aria-label="Manage years">
+            <span class="nav-icon"><svg data-lucide="calendar-range"></svg></span>
+            <span class="nav-label">Years</span>
+          </button>
           <button class="tab-btn admin-only" data-tab="sectionsTab" type="button" aria-label="Manage sections">
             <span class="nav-icon"><svg data-lucide="tag"></svg></span>
             <span class="nav-label">Sections</span>
@@ -338,6 +342,20 @@
             <label>Select Date</label>
             <input type="date" id="markDate" class="input-control" />
           </div>
+          <div class="form-group">
+            <label>Categorize By</label>
+            <select id="markCategoryFilter" class="input-control">
+              <option value="ALL">All Categories</option>
+              <option value="Aided">Aided</option>
+              <option value="Self-Finance">Self-Finance</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Year</label>
+            <select id="markYearFilter" class="input-control">
+              <option value="ALL">All Years</option>
+            </select>
+          </div>
         </div>
 
         <div id="markLockBanner" class="hidden lock-banner">
@@ -434,6 +452,13 @@
               <option value="Self-Finance">Self-Finance</option>
             </select>
           </div>
+
+          <div class="filter-group">
+            <label style="font-size: 0.8rem; color: var(--text-muted);">Year:</label>
+            <select id="filterYear" class="input-control" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+              <option value="ALL">All Years</option>
+            </select>
+          </div>
         </div>
 
         <!-- Summary Stats Cards -->
@@ -468,6 +493,7 @@
                 <th>Register No</th>
                 <th>Dept Name</th>
                 <th>Category</th>
+                <th>Year</th>
                 <th style="text-align: center; width: 45px;">H1</th>
                 <th style="text-align: center; width: 45px;">H2</th>
                 <th style="text-align: center; width: 45px;">H3</th>
@@ -511,6 +537,7 @@
                 <th>Mobile</th>
                 <th>Dept Name</th>
                 <th>Category</th>
+                <th>Year</th>
                 <th>Section</th>
                 <th>Team</th>
                 <th class="admin-only">Actions</th>
@@ -536,6 +563,23 @@
         </form>
 
         <div class="tag-container" id="deptsTagList"></div>
+      </div>
+    </section>
+
+    <!-- TAB 5: YEAR MANAGEMENT (ADMIN ONLY) -->
+    <section id="yearsTab" class="tab-content hidden">
+      <div class="card">
+        <h2>Years Management</h2>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;">
+          Add or remove student years dynamically. These options appear in the student form and attendance filters.
+        </p>
+
+        <form id="addYearForm" style="display: flex; gap: 12px; max-width: 500px; margin-bottom: 1.5rem;">
+          <input type="text" id="newYearInput" class="input-control" placeholder="Enter Year (e.g. Fifth Year)" required />
+          <button type="submit" class="btn btn-primary" style="white-space: nowrap;">Add Year</button>
+        </form>
+
+        <div class="tag-container" id="yearsTagList"></div>
       </div>
     </section>
 
@@ -700,6 +744,11 @@
             <label>Department Name</label>
             <select id="studentDeptName" class="input-control" required></select>
           </div>
+        </div>
+
+        <div class="form-group">
+          <label>Year</label>
+          <select id="studentYear" class="input-control" required></select>
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
