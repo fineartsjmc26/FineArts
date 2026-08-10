@@ -12,7 +12,10 @@
       "name": "Student Incharge 1",
       "password": "user123",
       "role": "incharge",
-      "username": "incharge1"
+      "username": "incharge1",
+      "assignedTeamIds": [
+        "Team Alpha"
+      ]
     }
   ],
   "departments": [

@@ -4,7 +4,7 @@
 const defaultAppData = {
   users: [
     { id: "u1", username: "admin", password: "admin123", role: "admin", name: "System Administrator" },
-    { id: "u2", username: "incharge1", password: "user123", role: "incharge", name: "Student Incharge 1" }
+    { id: "u2", username: "incharge1", password: "user123", role: "incharge", name: "Student Incharge 1", assignedTeamIds: ["Team Alpha"] }
   ],
   departments: ["Computer Science", "Information Technology", "Electronics & Comm", "Commerce", "Mathematics"],
   years: ["First Year", "Second Year", "Third Year", "Fourth Year"],
@@ -456,6 +456,7 @@ function initUIEvents() {
   document.getElementById('closeUserModal').addEventListener('click', () => closeModal('userModal'));
   document.getElementById('cancelUserBtn').addEventListener('click', () => closeModal('userModal'));
   document.getElementById('userForm').addEventListener('submit', handleSaveUser);
+  document.getElementById('newUserRole').addEventListener('change', updateUserTeamAssignmentVisibility);
 
   const profileTrigger = document.getElementById('profileMenuTrigger');
   if (profileTrigger) {
@@ -666,7 +667,8 @@ function renderDashboardOverview() {
 
 function populateDropdowns() {
   const markTeamSelect = document.getElementById('markTeamSelect');
-  markTeamSelect.innerHTML = appData.teams.map(t => `<option value="${t}">${t}</option>`).join('');
+  const markableTeams = getMarkableTeamIds();
+  markTeamSelect.innerHTML = markableTeams.map(t => `<option value="${t}">${t}</option>`).join('');
 
   const filterTeam = document.getElementById('filterTeam');
   filterTeam.innerHTML = `<option value="ALL">All Teams</option>` + appData.teams.map(t => `<option value="${t}">${t}</option>`).join('');
@@ -698,6 +700,21 @@ function getStudentTeamIds(student) {
   const teamIds = Array.isArray(student.teamIds) ? [...student.teamIds] : [];
   if (student.teamId && !teamIds.includes(student.teamId)) teamIds.push(student.teamId);
   return teamIds;
+}
+
+function getUserTeamIds(user) {
+  const teamIds = Array.isArray(user?.assignedTeamIds) ? [...user.assignedTeamIds] : [];
+  if (user?.assignedTeamId && !teamIds.includes(user.assignedTeamId)) teamIds.push(user.assignedTeamId);
+  return teamIds;
+}
+
+function getMarkableTeamIds() {
+  if (currentUser?.role === 'admin') return appData.teams;
+  return appData.teams.filter(teamId => getUserTeamIds(currentUser).includes(teamId));
+}
+
+function canMarkTeam(teamId) {
+  return currentUser?.role === 'admin' || (currentUser?.role === 'incharge' && getUserTeamIds(currentUser).includes(teamId));
 }
 
 function getStudentAttendanceRecord(studentId, date) {
@@ -740,13 +757,14 @@ function renderAttendanceMarkingForm() {
 
   const existingRecord = appData.attendance.find(a => a.teamId === teamId && a.date === date);
   const isAdmin = currentUser?.role === 'admin';
-  const isLocked = !isAdmin;
+  const canMark = canMarkTeam(teamId);
+  const isLocked = !canMark || (!isAdmin && existingRecord?.locked !== false && existingRecord);
 
   const markLockBanner = document.getElementById('markLockBanner');
   const saveAttendanceBtn = document.getElementById('saveAttendanceBtn');
   const batchActionBtns = document.getElementById('batchActionBtns');
 
-  if (!isAdmin || (existingRecord && existingRecord.locked)) {
+  if (!canMark || (existingRecord && existingRecord.locked)) {
     markLockBanner.classList.remove('hidden');
   } else {
     markLockBanner.classList.add('hidden');
@@ -795,7 +813,7 @@ function renderAttendanceMarkingForm() {
 }
 
 function togglePABtn(btn) {
-  if (currentUser?.role !== 'admin' || btn.disabled) return;
+  if (!canMarkTeam(document.getElementById('markTeamSelect')?.value) || btn.disabled) return;
   if (btn.textContent === 'P') {
     btn.textContent = 'A';
     btn.classList.remove('present');
@@ -808,7 +826,7 @@ function togglePABtn(btn) {
 }
 
 function setAll5Hours(val) {
-  if (currentUser?.role !== 'admin') return;
+  if (!canMarkTeam(document.getElementById('markTeamSelect')?.value)) return;
 
   document.querySelectorAll('#attendanceMarkTbody .pa-toggle-btn').forEach(btn => {
     if (!btn.disabled) {
@@ -823,12 +841,12 @@ function setAll5Hours(val) {
 }
 
 async function handleSaveAttendance() {
-  if (currentUser?.role !== 'admin') {
-    alert('Only administrators can edit attendance.');
+  const teamId = document.getElementById('markTeamSelect').value;
+  if (!canMarkTeam(teamId)) {
+    alert('You can only mark attendance for teams allotted to you by an administrator.');
     return;
   }
 
-  const teamId = document.getElementById('markTeamSelect').value;
   const date = document.getElementById('markDate').value;
   const categoryFilter = document.getElementById('markCategoryFilter')?.value || 'ALL';
   const yearFilter = document.getElementById('markYearFilter')?.value || 'ALL';
@@ -844,6 +862,10 @@ async function handleSaveAttendance() {
   const studentAttendanceMap = {};
   const index = appData.attendance.findIndex(a => a.teamId === teamId && a.date === date);
   const existingTeamRecord = index >= 0 ? appData.attendance[index] : null;
+  if (currentUser?.role !== 'admin' && existingTeamRecord?.locked !== false) {
+    alert(`Attendance for ${teamId} on ${date} is already locked.`);
+    return;
+  }
   if (existingTeamRecord?.studentAttendanceMap) {
     Object.assign(studentAttendanceMap, existingTeamRecord.studentAttendanceMap);
   }
@@ -1401,6 +1423,7 @@ function renderUsersTable() {
       <td data-label="User ID"><strong>${u.username}</strong></td>
       <td data-label="Full Name">${u.name || u.username}</td>
       <td data-label="Role"><span class="user-role-tag" style="background: ${u.role === 'admin' ? 'var(--purple)' : 'var(--primary)'};">${u.role.toUpperCase()}</span></td>
+      <td data-label="Assigned Teams">${u.role === 'admin' ? 'All teams' : (getUserTeamIds(u).join(', ') || 'No teams allotted')}</td>
       <td data-label="Password">
         <div class="password-wrapper" style="max-width: 180px;">
           <input type="password" value="${u.password}" readonly class="input-control" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;" />
@@ -1432,6 +1455,8 @@ function openUserModal(userId = null) {
 
   const form = document.getElementById('userForm');
   form.reset();
+  const teamSelect = document.getElementById('newUserTeams');
+  teamSelect.innerHTML = appData.teams.map(teamId => `<option value="${teamId}">${teamId}</option>`).join('');
 
   if (userId) {
     const u = appData.users.find(x => x.id === userId);
@@ -1442,13 +1467,26 @@ function openUserModal(userId = null) {
       document.getElementById('newUserUsername').value = u.username;
       document.getElementById('newUserPassword').value = u.password;
       document.getElementById('newUserRole').value = u.role;
+      const assignedTeamIds = getUserTeamIds(u);
+      Array.from(teamSelect.options).forEach(option => {
+        option.selected = assignedTeamIds.includes(option.value);
+      });
     }
   } else {
     document.getElementById('userModalTitle').textContent = 'Add New User Account';
     document.getElementById('userEditId').value = '';
   }
 
+  updateUserTeamAssignmentVisibility();
   document.getElementById('userModal').classList.remove('hidden');
+}
+
+function updateUserTeamAssignmentVisibility() {
+  const teamGroup = document.getElementById('userTeamsGroup');
+  const teamSelect = document.getElementById('newUserTeams');
+  const isIncharge = document.getElementById('newUserRole')?.value === 'incharge';
+  if (teamGroup) teamGroup.classList.toggle('hidden', !isIncharge);
+  if (teamSelect) teamSelect.required = isIncharge;
 }
 
 async function handleSaveUser(e) {
@@ -1463,6 +1501,14 @@ async function handleSaveUser(e) {
   const username = document.getElementById('newUserUsername').value.trim();
   const password = document.getElementById('newUserPassword').value.trim();
   const role = document.getElementById('newUserRole').value;
+  const assignedTeamIds = Array.from(document.getElementById('newUserTeams').selectedOptions || [])
+    .map(option => option.value)
+    .filter(Boolean);
+
+  if (role === 'incharge' && assignedTeamIds.length === 0) {
+    alert('Assign at least one team to a Student Incharge.');
+    return;
+  }
 
   const existing = appData.users.find(u => u.username === username && u.id !== id);
   if (existing) {
@@ -1473,7 +1519,7 @@ async function handleSaveUser(e) {
   if (id) {
     const idx = appData.users.findIndex(u => u.id === id);
     if (idx >= 0) {
-      appData.users[idx] = { ...appData.users[idx], name, username, password, role };
+      appData.users[idx] = { ...appData.users[idx], name, username, password, role, assignedTeamIds };
       if (currentUser.id === id) {
         currentUser = appData.users[idx];
         sessionStorage.setItem('attendance_session_user', JSON.stringify(currentUser));
@@ -1483,7 +1529,7 @@ async function handleSaveUser(e) {
     }
     alert(`User account "${username}" updated successfully!`);
   } else {
-    appData.users.push({ id: 'u_' + Date.now(), name, username, password, role });
+    appData.users.push({ id: 'u_' + Date.now(), name, username, password, role, assignedTeamIds });
     alert(`User account "${username}" successfully created!`);
   }
 

@@ -643,6 +643,7 @@
                 <th>User Name / ID</th>
                 <th>Full Name</th>
                 <th>Role</th>
+                <th>Assigned Teams</th>
                 <th>Password (Toggle Eye)</th>
                 <th>Actions</th>
               </tr>
@@ -822,6 +823,12 @@
             <option value="incharge">Student Incharge</option>
             <option value="admin">System Admin</option>
           </select>
+        </div>
+
+        <div class="form-group" id="userTeamsGroup">
+          <label for="newUserTeams">Allotted Teams</label>
+          <select id="newUserTeams" class="input-control multi-select-control" multiple aria-describedby="userTeamsHelp"></select>
+          <small id="userTeamsHelp" class="form-help">Select the teams this student in-charge can mark attendance for.</small>
         </div>
 
         <div style="margin-top: 1.5rem; text-align: right;">
