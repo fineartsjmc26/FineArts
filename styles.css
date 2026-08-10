@@ -1657,6 +1657,14 @@ html:not([data-theme="dark"]) .btn-primary { box-shadow: 0 4px 12px rgba(37, 99,
   color: var(--text-muted);
 }
 
+[data-theme="dark"] .data-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+[data-theme="dark"] .stat-card::before {
+  background: linear-gradient(135deg, rgba(79, 209, 197, 0.08), transparent 60%);
+}
+
 [data-theme="dark"] .floating-action {
   background: linear-gradient(135deg, var(--primary), #6d5bd0);
 }
