@@ -162,6 +162,11 @@ async function registerFirestoreListener() {
         firestoreSyncHealthy = true;
         lastFirestoreError = null;
         console.log('Firestore sync update received', { users: appData.users.length, students: appData.students.length, attendance: appData.attendance.length });
+        if (currentUser && !appData.users.some(user => user.id === currentUser.id)) {
+          alert('Your user account was deleted by an administrator. You will now be logged out.');
+          logoutCurrentUser();
+          return;
+        }
         if (currentUser) renderAllViews();
       }
     }, (error) => {
@@ -290,15 +295,19 @@ function initAuth() {
   });
 
   document.getElementById('logoutBtn').addEventListener('click', () => {
-    currentUser = null;
-    sessionStorage.removeItem('attendance_session_user');
-    document.getElementById('appHeader').classList.add('hidden');
-    document.getElementById('mainContainer').classList.add('hidden');
-    document.getElementById('appSidebar').classList.add('hidden');
-    document.getElementById('authWrapper').classList.remove('hidden');
-    document.getElementById('loginForm').reset();
-    document.querySelectorAll('.profile-menu.show').forEach(el => el.classList.remove('show'));
+    logoutCurrentUser();
   });
+}
+
+function logoutCurrentUser() {
+  currentUser = null;
+  sessionStorage.removeItem('attendance_session_user');
+  document.getElementById('appHeader')?.classList.add('hidden');
+  document.getElementById('mainContainer')?.classList.add('hidden');
+  document.getElementById('appSidebar')?.classList.add('hidden');
+  document.getElementById('authWrapper')?.classList.remove('hidden');
+  document.getElementById('loginForm')?.reset();
+  document.querySelectorAll('.profile-menu.show').forEach(el => el.classList.remove('show'));
 }
 
 function showDashboard() {
@@ -1389,7 +1398,7 @@ async function removeUser(userId) {
 
     if (currentUser.id === userId) {
       alert('You have deleted your own account. You will now be logged out.');
-      document.getElementById('logoutBtn').click();
+      logoutCurrentUser();
     } else {
       alert(`User account "${targetUser.username}" removed.`);
     }
