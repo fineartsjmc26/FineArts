@@ -1607,3 +1607,61 @@ html:not([data-theme="dark"]) .btn-primary { box-shadow: 0 4px 12px rgba(37, 99,
   .hero-actions .btn { flex: 1 1 100%; }
   .card { margin-bottom: 1rem; }
 }
+
+/* Dark theme coverage for secondary surfaces and state colors. */
+[data-theme="dark"] .auth-wrapper {
+  background:
+    radial-gradient(circle at 12% 12%, rgba(79, 209, 197, 0.1), transparent 20rem),
+    radial-gradient(circle at 88% 88%, rgba(167, 156, 242, 0.1), transparent 22rem),
+    var(--bg);
+}
+
+[data-theme="dark"] .auth-card {
+  border-color: var(--border);
+  box-shadow: var(--shadow-lg);
+}
+
+[data-theme="dark"] .sidebar-overlay {
+  background: rgba(2, 8, 12, 0.7);
+}
+
+[data-theme="dark"] .btn-danger:hover {
+  background: rgba(241, 139, 152, 0.24);
+}
+
+[data-theme="dark"] .btn-success:hover {
+  background: #42b77f;
+}
+
+[data-theme="dark"] .pa-toggle-btn.present,
+[data-theme="dark"] .pa-badge.present {
+  color: var(--success);
+}
+
+[data-theme="dark"] .pa-toggle-btn.absent,
+[data-theme="dark"] .pa-badge.absent {
+  color: var(--danger);
+}
+
+[data-theme="dark"] .badge-self {
+  background: rgba(167, 156, 242, 0.15);
+  color: var(--purple);
+}
+
+[data-theme="dark"] .lock-banner {
+  color: var(--warning);
+}
+
+[data-theme="dark"] .search-clear {
+  background: var(--surface-raised);
+  color: var(--text-muted);
+}
+
+[data-theme="dark"] .floating-action {
+  background: linear-gradient(135deg, var(--primary), #6d5bd0);
+}
+
+[data-theme="dark"] select.input-control option {
+  background: var(--surface-raised);
+  color: var(--text);
+}
