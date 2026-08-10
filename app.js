@@ -410,6 +410,7 @@ function initUIEvents() {
 
   document.getElementById('markTeamSelect').addEventListener('change', renderAttendanceMarkingForm);
   document.getElementById('markDate').addEventListener('change', renderAttendanceMarkingForm);
+  document.getElementById('markDeptNameFilter').addEventListener('change', renderAttendanceMarkingForm);
   document.getElementById('applyMarkFiltersBtn').addEventListener('click', renderAttendanceMarkingForm);
 
   document.getElementById('markAllPresentBtn').addEventListener('click', () => setAll5Hours('P'));
@@ -685,6 +686,8 @@ function populateDropdowns() {
   if (filterYear) filterYear.innerHTML = `<option value="ALL">All Years</option>` + yearOptions;
   const markCategoryFilter = document.getElementById('markCategoryFilter');
   if (markCategoryFilter) markCategoryFilter.innerHTML = '<option value="ALL">All Categories</option><option value="Aided">Aided</option><option value="Self-Finance">Self-Finance</option>';
+  const markDeptNameFilter = document.getElementById('markDeptNameFilter');
+  if (markDeptNameFilter) markDeptNameFilter.innerHTML = '<option value="ALL">All Departments</option>' + appData.departments.map(d => `<option value="${d}">${d}</option>`).join('');
   const markYearFilter = document.getElementById('markYearFilter');
   if (markYearFilter) markYearFilter.innerHTML = `<option value="ALL">All Years</option>` + yearOptions;
 
@@ -745,6 +748,7 @@ function renderAttendanceMarkingForm() {
   const teamId = document.getElementById('markTeamSelect').value;
   const date = document.getElementById('markDate').value;
   const categoryFilter = document.getElementById('markCategoryFilter')?.value || 'ALL';
+  const deptNameFilter = document.getElementById('markDeptNameFilter')?.value || 'ALL';
   const yearFilter = document.getElementById('markYearFilter')?.value || 'ALL';
 
   const tbody = document.getElementById('attendanceMarkTbody');
@@ -754,6 +758,7 @@ function renderAttendanceMarkingForm() {
 
   const teamStudents = appData.students.filter(s => getStudentTeamIds(s).includes(teamId)
     && (categoryFilter === 'ALL' || s.department === categoryFilter)
+    && (deptNameFilter === 'ALL' || s.deptName === deptNameFilter)
     && (yearFilter === 'ALL' || s.year === yearFilter));
   document.getElementById('teamStudentCountTitle').textContent = `Team Students (${teamStudents.length})`;
 
@@ -851,9 +856,11 @@ async function handleSaveAttendance() {
 
   const date = document.getElementById('markDate').value;
   const categoryFilter = document.getElementById('markCategoryFilter')?.value || 'ALL';
+  const deptNameFilter = document.getElementById('markDeptNameFilter')?.value || 'ALL';
   const yearFilter = document.getElementById('markYearFilter')?.value || 'ALL';
   const teamStudents = appData.students.filter(s => getStudentTeamIds(s).includes(teamId)
     && (categoryFilter === 'ALL' || s.department === categoryFilter)
+    && (deptNameFilter === 'ALL' || s.deptName === deptNameFilter)
     && (yearFilter === 'ALL' || s.year === yearFilter));
 
   if (teamStudents.length === 0) {

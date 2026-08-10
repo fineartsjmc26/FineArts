@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#2563eb" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="icon" href="img/unnamed.png" type="image/png" />
   <link rel="apple-touch-icon" href="img/unnamed.png" />
@@ -184,7 +184,7 @@
           <form id="loginForm">
             <div class="form-group">
               <label for="loginUsername">Username / User ID</label>
-              <input type="text" id="loginUsername" class="input-control" placeholder="Enter username (e.g. admin or incharge1)" required />
+              <input type="text" id="loginUsername" class="input-control" placeholder="Enter username" required />
             </div>
 
             <div class="form-group">
@@ -200,11 +200,6 @@
             </button>
           </form>
 
-          <div style="margin-top: 1.5rem; text-align: center; font-size: 0.8rem; color: var(--text-muted); background: var(--bg); padding: 12px; border-radius: 8px; border: 1px dashed var(--border);">
-            <strong>Demo Login Credentials:</strong><br/>
-            Admin: <code>admin</code> / <code>admin123</code><br/>
-            Student Incharge: <code>incharge1</code> / <code>user123</code>
-          </div>
         </div>
       </div>
 
@@ -227,9 +222,9 @@
           <div class="hero-ring"></div>
           <div class="hero-ring hero-ring-alt"></div>
           <div class="hero-panel">
-            <div class="hero-panel-title">Attendance score</div>
+            <div class="hero-panel-title">Attendance rate</div>
             <div class="hero-panel-value" id="dashboardAttendanceRate">0%</div>
-            <div class="hero-panel-meta">Live today’s activity</div>
+            <div class="hero-panel-meta">From today’s attendance records</div>
           </div>
         </div>
       </div>
@@ -348,6 +343,12 @@
               <option value="ALL">All Categories</option>
               <option value="Aided">Aided</option>
               <option value="Self-Finance">Self-Finance</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Department</label>
+            <select id="markDeptNameFilter" class="input-control">
+              <option value="ALL">All Departments</option>
             </select>
           </div>
           <div class="form-group">
@@ -570,11 +571,11 @@
       <div class="card">
         <h2>Department Names Management</h2>
         <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;">
-          Add or remove Department Names dynamically (e.g. Computer Science, IT, Commerce, Mathematics).
+          Add or remove department names dynamically.
         </p>
 
         <form id="addDeptForm" style="display: flex; gap: 12px; max-width: 500px; margin-bottom: 1.5rem;">
-          <input type="text" id="newDeptInput" class="input-control" placeholder="Enter Department Name (e.g. Computer Science)" required />
+          <input type="text" id="newDeptInput" class="input-control" placeholder="Enter department name" required />
           <button type="submit" class="btn btn-primary" style="white-space: nowrap;">Add Department</button>
         </form>
 
@@ -591,7 +592,7 @@
         </p>
 
         <form id="addYearForm" style="display: flex; gap: 12px; max-width: 500px; margin-bottom: 1.5rem;">
-          <input type="text" id="newYearInput" class="input-control" placeholder="Enter Year (e.g. Fifth Year)" required />
+          <input type="text" id="newYearInput" class="input-control" placeholder="Enter year" required />
           <button type="submit" class="btn btn-primary" style="white-space: nowrap;">Add Year</button>
         </form>
 
@@ -604,11 +605,11 @@
       <div class="card">
         <h2>Sections Management</h2>
         <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;">
-          Add or remove sections dynamically (e.g. Section A, Section B).
+          Add or remove sections dynamically.
         </p>
 
         <form id="addSectionForm" style="display: flex; gap: 12px; max-width: 500px; margin-bottom: 1.5rem;">
-          <input type="text" id="newSectionInput" class="input-control" placeholder="Enter Section Name (e.g. Section D)" required />
+          <input type="text" id="newSectionInput" class="input-control" placeholder="Enter section name" required />
           <button type="submit" class="btn btn-primary" style="white-space: nowrap;">Add Section</button>
         </form>
 
@@ -621,11 +622,11 @@
       <div class="card">
         <h2>Teams Management</h2>
         <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;">
-          Add or remove Teams dynamically (e.g. Team Alpha, Team Beta, Team Gamma).
+          Add or remove teams dynamically.
         </p>
 
         <form id="addTeamForm" style="display: flex; gap: 12px; max-width: 500px; margin-bottom: 1.5rem;">
-          <input type="text" id="newTeamInput" class="input-control" placeholder="Enter Team Name (e.g. Team Epsilon)" required />
+          <input type="text" id="newTeamInput" class="input-control" placeholder="Enter team name" required />
           <button type="submit" class="btn btn-primary" style="white-space: nowrap;">Add Team</button>
         </form>
 
@@ -744,18 +745,18 @@
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
           <div class="form-group">
             <label>Roll Number</label>
-            <input type="text" id="studentRoll" class="input-control" placeholder="e.g. 21CS05" required />
+            <input type="text" id="studentRoll" class="input-control" placeholder="Enter roll number" required />
           </div>
           <div class="form-group">
             <label>Register Number</label>
-            <input type="text" id="studentRegister" class="input-control" placeholder="e.g. 910021104005" required />
+            <input type="text" id="studentRegister" class="input-control" placeholder="Enter register number" required />
           </div>
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
           <div class="form-group">
             <label>Mobile Number</label>
-            <input type="tel" id="studentMobile" class="input-control" placeholder="e.g. 9876543210" required />
+            <input type="tel" id="studentMobile" class="input-control" placeholder="Enter mobile number" required />
           </div>
           <div class="form-group">
             <label>Department Name</label>
@@ -814,7 +815,7 @@
 
         <div class="form-group">
           <label>Username / User ID</label>
-          <input type="text" id="newUserUsername" class="input-control" placeholder="e.g. incharge2" required />
+          <input type="text" id="newUserUsername" class="input-control" placeholder="Enter username" required />
         </div>
 
         <div class="form-group">
