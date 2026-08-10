@@ -410,6 +410,7 @@ function initUIEvents() {
 
   document.getElementById('markTeamSelect').addEventListener('change', renderAttendanceMarkingForm);
   document.getElementById('markDate').addEventListener('change', renderAttendanceMarkingForm);
+  document.getElementById('applyMarkFiltersBtn').addEventListener('click', renderAttendanceMarkingForm);
 
   document.getElementById('markAllPresentBtn').addEventListener('click', () => setAll5Hours('P'));
   document.getElementById('markAllAbsentBtn').addEventListener('click', () => setAll5Hours('A'));
@@ -424,9 +425,10 @@ function initUIEvents() {
   document.getElementById('unlockBtn').addEventListener('click', handleUnlockAttendance);
 
   // Calendar Date Filter and Category Filters in Viewing Area
-  ['filterDate', 'filterTeam', 'filterDeptName', 'filterDept', 'filterYear', 'markCategoryFilter', 'markYearFilter'].forEach(id => {
+  ['filterDate', 'filterTeam', 'filterDeptName', 'filterDept', 'filterYear'].forEach(id => {
     document.getElementById(id).addEventListener('change', renderRecordsTable);
   });
+  document.getElementById('applyHistoryFiltersBtn').addEventListener('click', renderRecordsTable);
 
   document.getElementById('clearDateFilterBtn').addEventListener('click', () => {
     document.getElementById('filterDate').value = '';
