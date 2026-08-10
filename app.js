@@ -433,6 +433,8 @@ function initUIEvents() {
     renderRecordsTable();
   });
 
+  document.getElementById('deleteDateBtn').addEventListener('click', deleteAttendanceDate);
+  document.getElementById('deleteMonthBtn').addEventListener('click', deleteAttendanceMonth);
   document.getElementById('exportExcelBtn').addEventListener('click', exportToExcel);
   document.getElementById('studentSearchInput').addEventListener('input', renderStudentsTable);
   document.getElementById('clearStudentSearchBtn').addEventListener('click', () => {
@@ -897,6 +899,44 @@ async function handleUnlockAttendance() {
     alert('Attendance unlocked for editing by Admin!');
     renderAttendanceMarkingForm();
   }
+}
+
+async function deleteAttendanceRecords(periodLabel, matchesPeriod) {
+  if (currentUser?.role !== 'admin') return;
+
+  const matchingRecords = appData.attendance.filter(matchesPeriod);
+  if (matchingRecords.length === 0) {
+    alert(`No attendance records found for ${periodLabel}.`);
+    return;
+  }
+
+  if (!confirm(`Delete all attendance data for ${periodLabel}? This cannot be undone.`)) return;
+
+  appData.attendance = appData.attendance.filter(record => !matchesPeriod(record));
+  await saveAppData();
+  renderAllViews();
+  alert(`Attendance data for ${periodLabel} was deleted.`);
+}
+
+async function deleteAttendanceDate() {
+  const date = document.getElementById('filterDate').value;
+  if (!date) {
+    alert('Select a date before deleting attendance.');
+    return;
+  }
+
+  await deleteAttendanceRecords(date, record => record.date === date);
+}
+
+async function deleteAttendanceMonth() {
+  const date = document.getElementById('filterDate').value;
+  if (!date) {
+    alert('Select a date in the month before deleting attendance.');
+    return;
+  }
+
+  const month = date.slice(0, 7);
+  await deleteAttendanceRecords(month, record => record.date?.slice(0, 7) === month);
 }
 
 // Attendance Records Viewing Area (With Calendar Date Filtering)
