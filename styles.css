@@ -1535,6 +1535,16 @@ html:not([data-theme="dark"]) .sidebar {
   border-right-color: var(--border);
 }
 
+[data-theme="dark"] .sidebar {
+  background: linear-gradient(180deg, #111f28 0%, #0d1a22 100%);
+  border-right-color: var(--border);
+}
+
+[data-theme="dark"] .sidebar-collapse-btn,
+[data-theme="dark"] .sidebar-user-card {
+  background: var(--surface-raised);
+}
+
 .sidebar-top { padding-top: 1.1rem; }
 html:not([data-theme="dark"]) .brand-logo,
 html:not([data-theme="dark"]) .loader-mark { background: linear-gradient(135deg, #2563c7, #4c8de0); }
