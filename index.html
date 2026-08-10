@@ -717,8 +717,9 @@
         </div>
 
         <div class="form-group">
-          <label>Assign Team</label>
-          <select id="studentTeam" class="input-control" required></select>
+          <label for="studentTeam">Assign Event Teams</label>
+          <select id="studentTeam" class="input-control multi-select-control" multiple required aria-describedby="studentTeamHelp"></select>
+          <small id="studentTeamHelp" class="form-help">Select one or more event teams for this student.</small>
         </div>
 
         <div style="margin-top: 1.5rem; text-align: right;">

@@ -667,6 +667,33 @@ function populateDropdowns() {
   studentTeam.innerHTML = appData.teams.map(t => `<option value="${t}">${t}</option>`).join('');
 }
 
+function getStudentTeamIds(student) {
+  const teamIds = Array.isArray(student.teamIds) ? [...student.teamIds] : [];
+  if (student.teamId && !teamIds.includes(student.teamId)) teamIds.push(student.teamId);
+  return teamIds;
+}
+
+function getStudentAttendanceRecord(studentId, date) {
+  return appData.attendance.find(record =>
+    record.date === date && record.studentAttendanceMap?.[studentId]
+  );
+}
+
+function isStudentAttendanceUnlocked(studentId, date) {
+  return appData.attendance.some(record =>
+    record.date === date && record.locked === false && record.studentAttendanceMap?.[studentId]
+  );
+}
+
+function isStudentMarkedInAnotherTeam(studentId, date, teamId) {
+  if (isStudentAttendanceUnlocked(studentId, date)) return false;
+
+  return appData.attendance.some(record =>
+    record.date === date && record.teamId !== teamId && record.locked !== false &&
+    record.studentAttendanceMap?.[studentId]
+  );
+}
+
 // 5-Hour Attendance Marking Form
 function renderAttendanceMarkingForm() {
   const teamId = document.getElementById('markTeamSelect').value;
@@ -677,17 +704,18 @@ function renderAttendanceMarkingForm() {
 
   if (!teamId || !date) return;
 
-  const teamStudents = appData.students.filter(s => s.teamId === teamId);
+  const teamStudents = appData.students.filter(s => getStudentTeamIds(s).includes(teamId));
   document.getElementById('teamStudentCountTitle').textContent = `Team Students (${teamStudents.length})`;
 
   const existingRecord = appData.attendance.find(a => a.teamId === teamId && a.date === date);
-  const isLocked = existingRecord && existingRecord.locked && currentUser.role === 'incharge';
+  const isAdmin = currentUser?.role === 'admin';
+  const isLocked = !isAdmin;
 
   const markLockBanner = document.getElementById('markLockBanner');
   const saveAttendanceBtn = document.getElementById('saveAttendanceBtn');
   const batchActionBtns = document.getElementById('batchActionBtns');
 
-  if (existingRecord && existingRecord.locked) {
+  if (!isAdmin || (existingRecord && existingRecord.locked)) {
     markLockBanner.classList.remove('hidden');
   } else {
     markLockBanner.classList.add('hidden');
@@ -710,8 +738,10 @@ function renderAttendanceMarkingForm() {
 
   teamStudents.forEach(s => {
     let h1 = 'P', h2 = 'P', h3 = 'P', h4 = 'P', h5 = 'P';
-    if (existingRecord && existingRecord.studentAttendanceMap && existingRecord.studentAttendanceMap[s.id]) {
-      const rec = existingRecord.studentAttendanceMap[s.id];
+    const studentRecord = getStudentAttendanceRecord(s.id, date);
+    const isStudentLocked = isStudentMarkedInAnotherTeam(s.id, date, teamId);
+    if (studentRecord) {
+      const rec = studentRecord.studentAttendanceMap[s.id];
       h1 = rec.h1 || 'P'; h2 = rec.h2 || 'P'; h3 = rec.h3 || 'P'; h4 = rec.h4 || 'P'; h5 = rec.h5 || 'P';
     }
 
@@ -723,18 +753,18 @@ function renderAttendanceMarkingForm() {
       <td data-label="Department">${s.deptName || 'Computer Science'}</td>
       <td data-label="Category"><span class="badge ${s.department === 'Aided' ? 'badge-aided' : 'badge-self'}">${s.department}</span></td>
       
-      <td data-label="H1" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h1 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="1" ${isLocked ? 'disabled' : ''}>${h1}</button></td>
-      <td data-label="H2" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h2 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="2" ${isLocked ? 'disabled' : ''}>${h2}</button></td>
-      <td data-label="H3" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h3 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="3" ${isLocked ? 'disabled' : ''}>${h3}</button></td>
-      <td data-label="H4" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h4 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="4" ${isLocked ? 'disabled' : ''}>${h4}</button></td>
-      <td data-label="H5" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h5 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="5" ${isLocked ? 'disabled' : ''}>${h5}</button></td>
+      <td data-label="H1" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h1 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="1" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h1}</button></td>
+      <td data-label="H2" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h2 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="2" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h2}</button></td>
+      <td data-label="H3" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h3 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="3" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h3}</button></td>
+      <td data-label="H4" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h4 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="4" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h4}</button></td>
+      <td data-label="H5" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h5 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="5" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h5}</button></td>
     `;
     tbody.appendChild(tr);
   });
 }
 
 function togglePABtn(btn) {
-  if (btn.disabled) return;
+  if (currentUser?.role !== 'admin' || btn.disabled) return;
   if (btn.textContent === 'P') {
     btn.textContent = 'A';
     btn.classList.remove('present');
@@ -747,6 +777,8 @@ function togglePABtn(btn) {
 }
 
 function setAll5Hours(val) {
+  if (currentUser?.role !== 'admin') return;
+
   document.querySelectorAll('#attendanceMarkTbody .pa-toggle-btn').forEach(btn => {
     if (!btn.disabled) {
       btn.textContent = val;
@@ -760,9 +792,14 @@ function setAll5Hours(val) {
 }
 
 async function handleSaveAttendance() {
+  if (currentUser?.role !== 'admin') {
+    alert('Only administrators can edit attendance.');
+    return;
+  }
+
   const teamId = document.getElementById('markTeamSelect').value;
   const date = document.getElementById('markDate').value;
-  const teamStudents = appData.students.filter(s => s.teamId === teamId);
+  const teamStudents = appData.students.filter(s => getStudentTeamIds(s).includes(teamId));
 
   if (teamStudents.length === 0) {
     alert('No students to mark attendance for!');
@@ -770,7 +807,15 @@ async function handleSaveAttendance() {
   }
 
   const studentAttendanceMap = {};
+  const index = appData.attendance.findIndex(a => a.teamId === teamId && a.date === date);
+  const existingTeamRecord = index >= 0 ? appData.attendance[index] : null;
+  if (existingTeamRecord?.studentAttendanceMap) {
+    Object.assign(studentAttendanceMap, existingTeamRecord.studentAttendanceMap);
+  }
+
   teamStudents.forEach(s => {
+    if (isStudentMarkedInAnotherTeam(s.id, date, teamId)) return;
+
     const btnH1 = document.querySelector(`.pa-toggle-btn[data-student="${s.id}"][data-hour="1"]`);
     const btnH2 = document.querySelector(`.pa-toggle-btn[data-student="${s.id}"][data-hour="2"]`);
     const btnH3 = document.querySelector(`.pa-toggle-btn[data-student="${s.id}"][data-hour="3"]`);
@@ -786,7 +831,11 @@ async function handleSaveAttendance() {
     };
   });
 
-  const index = appData.attendance.findIndex(a => a.teamId === teamId && a.date === date);
+  if (Object.keys(studentAttendanceMap).length === 0) {
+    alert(`Attendance for these students has already been marked for ${date}.`);
+    return;
+  }
+
   const newRecord = {
     id: index >= 0 ? appData.attendance[index].id : 'att_' + Date.now(),
     teamId, date, studentAttendanceMap,
@@ -1024,7 +1073,7 @@ function renderStudentsTable() {
       <td data-label="Dept Name">${s.deptName || 'Computer Science'}</td>
       <td data-label="Category"><span class="badge ${s.department === 'Aided' ? 'badge-aided' : 'badge-self'}">${s.department}</span></td>
       <td data-label="Section">${s.section}</td>
-      <td data-label="Team"><span style="font-size: 0.85rem; color: var(--primary); font-weight: 600;">${s.teamId || 'Team Alpha'}</span></td>
+      <td data-label="Team"><span style="font-size: 0.85rem; color: var(--primary); font-weight: 600;">${getStudentTeamIds(s).join(', ') || 'Team Alpha'}</span></td>
       <td data-label="Actions" class="admin-only">
         <div style="display: flex; gap: 6px;">
           <button class="btn btn-secondary btn-sm" onclick="openStudentModal('${s.id}')">✏️ Edit</button>
@@ -1057,7 +1106,10 @@ function openStudentModal(studentId = null) {
       document.getElementById('studentDeptName').value = s.deptName || appData.departments[0];
       document.getElementById('studentDept').value = s.department;
       document.getElementById('studentSection').value = s.section;
-      document.getElementById('studentTeam').value = s.teamId || appData.teams[0];
+      const assignedTeamIds = getStudentTeamIds(s);
+      Array.from(document.getElementById('studentTeam').options).forEach(option => {
+        option.selected = assignedTeamIds.includes(option.value);
+      });
     }
   } else {
     document.getElementById('studentModalTitle').textContent = 'Add New Student';
@@ -1077,9 +1129,13 @@ async function handleSaveStudent(e) {
   const deptName = document.getElementById('studentDeptName').value;
   const department = document.getElementById('studentDept').value;
   const section = document.getElementById('studentSection').value;
-  const teamId = document.getElementById('studentTeam').value;
+  const studentTeam = document.getElementById('studentTeam');
+  const teamIds = Array.from(studentTeam.selectedOptions || [])
+    .map(option => option.value)
+    .filter(Boolean);
+  const teamId = teamIds[0] || '';
 
-  const studentData = { id: id || 's_' + Date.now(), name, rollNumber, registerNumber, mobile, deptName, department, section, teamId };
+  const studentData = { id: id || 's_' + Date.now(), name, rollNumber, registerNumber, mobile, deptName, department, section, teamId, teamIds };
 
   if (id) {
     const idx = appData.students.findIndex(s => s.id === id);

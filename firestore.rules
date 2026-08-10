@@ -32,8 +32,8 @@ service cloud.firestore {
     match /attendance/{attendanceId} {
       allow read: if isAdmin() || isIncharge();
 
-      // Admin and Incharge can mark attendance
-      allow create: if isAdmin() || isIncharge();
+      // Only Admin can mark attendance
+      allow create: if isAdmin();
 
       // Only Admin can edit or delete attendance
       allow update, delete: if isAdmin();
