@@ -55,8 +55,8 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isSignedIn();
 
-      // Users can update only their own profile
-      allow update: if request.auth.uid == userId;
+      // Only Admin can change user IDs, passwords, roles, or profiles
+      allow update: if isAdmin();
 
       // Only Admin can create/delete users
       allow create, delete: if isAdmin();

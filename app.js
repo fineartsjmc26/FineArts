@@ -1308,6 +1308,11 @@ function toggleTablePassword(btn) {
 }
 
 function openUserModal(userId = null) {
+  if (currentUser?.role !== 'admin') {
+    alert('Only administrators can manage user IDs and passwords.');
+    return;
+  }
+
   const form = document.getElementById('userForm');
   form.reset();
 
@@ -1331,6 +1336,11 @@ function openUserModal(userId = null) {
 
 async function handleSaveUser(e) {
   e.preventDefault();
+  if (currentUser?.role !== 'admin') {
+    alert('Only administrators can change user IDs, passwords, or roles.');
+    return;
+  }
+
   const id = document.getElementById('userEditId').value;
   const name = document.getElementById('newUserName').value.trim();
   const username = document.getElementById('newUserUsername').value.trim();
