@@ -786,8 +786,7 @@ function renderAttendanceMarkingForm() {
   const existingRecord = appData.attendance.find(a => a.teamId === teamId && a.date === date);
   const isAdmin = currentUser?.role === 'admin';
   const canMark = canMarkTeam(teamId);
-  const isTeamLocked = Boolean(existingRecord?.locked && !canEditAttendanceRecord(existingRecord, teamId));
-  const isLocked = !canMark || isTeamLocked;
+  const isLocked = !canMark;
 
   const markLockBanner = document.getElementById('markLockBanner');
   const saveAttendanceBtn = document.getElementById('saveAttendanceBtn');
@@ -893,12 +892,6 @@ async function handleSaveAttendance() {
   const studentAttendanceMap = {};
   const index = appData.attendance.findIndex(a => a.teamId === teamId && a.date === date);
   const existingTeamRecord = index >= 0 ? appData.attendance[index] : null;
-  if (existingTeamRecord && !canEditAttendanceRecord(existingTeamRecord, teamId)) {
-    if (existingTeamRecord.locked) {
-      alert(`Attendance for ${teamId} on ${date} is already locked.`);
-      return;
-    }
-  }
   const wasTeamComplete = isTeamAttendanceComplete(teamId, existingTeamRecord);
   if (existingTeamRecord?.studentAttendanceMap) {
     Object.assign(studentAttendanceMap, existingTeamRecord.studentAttendanceMap);
