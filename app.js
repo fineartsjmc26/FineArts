@@ -16,7 +16,8 @@ const defaultAppData = {
     { id: "s3", name: "Robert Brown", rollNumber: "21CS03", registerNumber: "910021104003", mobile: "9876543212", department: "Aided", deptName: "Commerce", year: "Third Year", section: "Section A", teamId: "Team Beta" },
     { id: "s4", name: "Emily Davis", rollNumber: "21CS04", registerNumber: "910021104004", mobile: "9876543213", department: "Self-Finance", deptName: "Mathematics", year: "Fourth Year", section: "Section C", teamId: "Team Gamma" }
   ],
-  attendance: []
+  attendance: [],
+  notifications: []
 };
 
 let appData = JSON.parse(JSON.stringify(defaultAppData));
@@ -111,6 +112,7 @@ function getMergedAppData(source) {
     teams: Array.isArray(source?.teams) && source.teams.length ? source.teams : defaultAppData.teams,
     students: Array.isArray(source?.students) && source.students.length ? source.students : defaultAppData.students,
     attendance: Array.isArray(source?.attendance) ? source.attendance : defaultAppData.attendance,
+    notifications: Array.isArray(source?.notifications) ? source.notifications : defaultAppData.notifications,
   };
 
   // preserve any extra properties without losing defaults
@@ -425,6 +427,7 @@ function initUIEvents() {
   }
   document.getElementById('unlockBtn').addEventListener('click', handleUnlockAttendance);
   document.getElementById('inchargeUnlockBtn').addEventListener('click', handleInchargeUnlockAttendance);
+  document.getElementById('notifBtn')?.addEventListener('click', handleNotificationsClick);
 
   // Calendar Date Filter and Category Filters in Viewing Area
   ['filterDate', 'filterTeam', 'filterDeptName', 'filterDept', 'filterYear'].forEach(id => {
@@ -561,6 +564,7 @@ function renderVisibleTab() {
 function renderAllViews() {
   populateDropdowns();
   renderDashboardOverview();
+  renderNotifications();
   renderAttendanceMarkingForm();
   renderRecordsTable();
   renderStudentsTable();
@@ -724,9 +728,16 @@ function canMarkTeam(teamId) {
 }
 
 function canEditAttendanceRecord(record, teamId) {
-  if (currentUser?.role === 'admin') return true;
-  return currentUser?.role === 'incharge' && canMarkTeam(teamId) &&
-    record?.locked === false && record.unlockMode === 'admin-incharge';
+  if (!record || !canMarkTeam(teamId)) return false;
+  if (record.unlockMode === 'admin') return currentUser?.role === 'admin';
+  if (record.unlockMode === 'admin-incharge') return true;
+  return record.locked === false;
+}
+
+function isAttendanceRecordUnlocked(record) {
+  if (record?.unlockMode === 'admin') return currentUser?.role === 'admin';
+  if (record?.unlockMode === 'admin-incharge') return currentUser?.role === 'admin' || currentUser?.role === 'incharge';
+  return false;
 }
 
 function getStudentAttendanceRecord(studentId, teamId, date) {
@@ -737,9 +748,20 @@ function getStudentAttendanceRecord(studentId, teamId, date) {
 
 function isStudentMarkedInAnotherTeam(studentId, date, teamId) {
   return appData.attendance.some(record =>
-    record.date === date && record.teamId !== teamId && record.locked !== false &&
+    record.date === date && record.teamId !== teamId && !isAttendanceRecordUnlocked(record) &&
     record.studentAttendanceMap?.[studentId]
   );
+}
+
+function isStudentLockedInTeam(studentId, record) {
+  return Boolean(record?.studentAttendanceMap?.[studentId]) && !isAttendanceRecordUnlocked(record);
+}
+
+function isTeamAttendanceComplete(teamId, record) {
+  const teamStudentIds = appData.students
+    .filter(student => getStudentTeamIds(student).includes(teamId))
+    .map(student => student.id);
+  return teamStudentIds.length > 0 && teamStudentIds.every(studentId => record?.studentAttendanceMap?.[studentId]);
 }
 
 // 5-Hour Attendance Marking Form
@@ -764,7 +786,8 @@ function renderAttendanceMarkingForm() {
   const existingRecord = appData.attendance.find(a => a.teamId === teamId && a.date === date);
   const isAdmin = currentUser?.role === 'admin';
   const canMark = canMarkTeam(teamId);
-  const isLocked = !canMark || Boolean(existingRecord && !canEditAttendanceRecord(existingRecord, teamId));
+  const isTeamLocked = Boolean(existingRecord?.locked && !canEditAttendanceRecord(existingRecord, teamId));
+  const isLocked = !canMark || isTeamLocked;
 
   const markLockBanner = document.getElementById('markLockBanner');
   const saveAttendanceBtn = document.getElementById('saveAttendanceBtn');
@@ -794,7 +817,7 @@ function renderAttendanceMarkingForm() {
   teamStudents.forEach(s => {
     let h1 = 'P', h2 = 'P', h3 = 'P', h4 = 'P', h5 = 'P';
     const studentRecord = getStudentAttendanceRecord(s.id, teamId, date);
-    const isStudentLocked = isStudentMarkedInAnotherTeam(s.id, date, teamId);
+    const isStudentLocked = isStudentLockedInTeam(s.id, existingRecord) || isStudentMarkedInAnotherTeam(s.id, date, teamId);
     if (studentRecord) {
       const rec = studentRecord.studentAttendanceMap[s.id];
       h1 = rec.h1 || 'P'; h2 = rec.h2 || 'P'; h3 = rec.h3 || 'P'; h4 = rec.h4 || 'P'; h5 = rec.h5 || 'P';
@@ -871,9 +894,12 @@ async function handleSaveAttendance() {
   const index = appData.attendance.findIndex(a => a.teamId === teamId && a.date === date);
   const existingTeamRecord = index >= 0 ? appData.attendance[index] : null;
   if (existingTeamRecord && !canEditAttendanceRecord(existingTeamRecord, teamId)) {
-    alert(`Attendance for ${teamId} on ${date} is already locked.`);
-    return;
+    if (existingTeamRecord.locked) {
+      alert(`Attendance for ${teamId} on ${date} is already locked.`);
+      return;
+    }
   }
+  const wasTeamComplete = isTeamAttendanceComplete(teamId, existingTeamRecord);
   if (existingTeamRecord?.studentAttendanceMap) {
     Object.assign(studentAttendanceMap, existingTeamRecord.studentAttendanceMap);
   }
@@ -901,18 +927,36 @@ async function handleSaveAttendance() {
     return;
   }
 
+  const teamIsComplete = isTeamAttendanceComplete(teamId, { studentAttendanceMap });
   const newRecord = {
     id: index >= 0 ? appData.attendance[index].id : 'att_' + Date.now(),
     teamId, date, studentAttendanceMap,
     markedBy: currentUser.name || currentUser.username,
-    locked: true, timestamp: new Date().toISOString()
+    locked: teamIsComplete,
+    teamLocked: teamIsComplete,
+    timestamp: new Date().toISOString()
   };
+
+  if (teamIsComplete && !wasTeamComplete) {
+    appData.notifications = Array.isArray(appData.notifications) ? appData.notifications : [];
+    appData.notifications.unshift({
+      id: 'notification_' + Date.now(),
+      type: 'team-attendance-complete',
+      teamId,
+      date,
+      message: `Attendance for ${teamId} on ${date} was completely marked by ${newRecord.markedBy}.`,
+      read: false,
+      timestamp: new Date().toISOString()
+    });
+  }
 
   if (index >= 0) appData.attendance[index] = newRecord;
   else appData.attendance.push(newRecord);
 
   await saveAppData();
-  alert(`5-Hour attendance saved and locked for ${teamId} (${date})!`);
+  alert(teamIsComplete
+    ? `5-Hour attendance saved and the entire team is locked for ${teamId} (${date})!`
+    : `5-Hour attendance saved. Marked students are locked; the team remains open for the remaining students.`);
   renderAttendanceMarkingForm();
   renderRecordsTable();
 }
@@ -946,6 +990,35 @@ async function handleInchargeUnlockAttendance() {
     await saveAppData();
     alert('Attendance unlocked for Admin and Student Incharge!');
     renderAttendanceMarkingForm();
+  }
+}
+
+function renderNotifications() {
+  const notificationDot = document.querySelector('#notifBtn .notif-dot');
+  if (!notificationDot) return;
+
+  const unreadCount = currentUser?.role === 'admin'
+    ? (appData.notifications || []).filter(notification => !notification.read).length
+    : 0;
+  notificationDot.classList.toggle('hidden', unreadCount === 0);
+  notificationDot.setAttribute('aria-label', unreadCount ? `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}` : 'No unread notifications');
+}
+
+async function handleNotificationsClick() {
+  if (currentUser?.role !== 'admin') return;
+
+  const notifications = (appData.notifications || []).filter(notification => notification.type === 'team-attendance-complete');
+  if (notifications.length === 0) {
+    alert('No team attendance notifications.');
+    return;
+  }
+
+  alert(notifications.slice(0, 5).map(notification => notification.message).join('\n'));
+  const unreadNotifications = notifications.filter(notification => !notification.read);
+  unreadNotifications.forEach(notification => { notification.read = true; });
+  if (unreadNotifications.length > 0) {
+    await saveAppData();
+    renderNotifications();
   }
 }
 
