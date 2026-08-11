@@ -424,6 +424,7 @@ function initUIEvents() {
     });
   }
   document.getElementById('unlockBtn').addEventListener('click', handleUnlockAttendance);
+  document.getElementById('inchargeUnlockBtn').addEventListener('click', handleInchargeUnlockAttendance);
 
   // Calendar Date Filter and Category Filters in Viewing Area
   ['filterDate', 'filterTeam', 'filterDeptName', 'filterDept', 'filterYear'].forEach(id => {
@@ -722,20 +723,20 @@ function canMarkTeam(teamId) {
   return currentUser?.role === 'admin' || (currentUser?.role === 'incharge' && getUserTeamIds(currentUser).includes(teamId));
 }
 
-function getStudentAttendanceRecord(studentId, date) {
-  return appData.attendance.find(record =>
-    record.date === date && record.studentAttendanceMap?.[studentId]
-  );
+function canEditAttendanceRecord(record, teamId) {
+  if (currentUser?.role === 'admin') return true;
+  return currentUser?.role === 'incharge' && canMarkTeam(teamId) &&
+    record?.locked === false && record.unlockMode === 'admin-incharge';
 }
 
-function isStudentAttendanceUnlocked(studentId, date) {
-  return appData.attendance.some(record =>
-    record.date === date && record.locked === false && record.studentAttendanceMap?.[studentId]
+function getStudentAttendanceRecord(studentId, teamId, date) {
+  return appData.attendance.find(record =>
+    record.teamId === teamId && record.date === date && record.studentAttendanceMap?.[studentId]
   );
 }
 
 function isStudentMarkedInAnotherTeam(studentId, date, teamId) {
-  if (isStudentAttendanceUnlocked(studentId, date)) return false;
+  if (currentUser?.role === 'admin') return false;
 
   return appData.attendance.some(record =>
     record.date === date && record.teamId !== teamId && record.locked !== false &&
@@ -765,7 +766,7 @@ function renderAttendanceMarkingForm() {
   const existingRecord = appData.attendance.find(a => a.teamId === teamId && a.date === date);
   const isAdmin = currentUser?.role === 'admin';
   const canMark = canMarkTeam(teamId);
-  const isLocked = !canMark || (!isAdmin && existingRecord?.locked !== false && existingRecord);
+  const isLocked = !canMark || Boolean(existingRecord && !canEditAttendanceRecord(existingRecord, teamId));
 
   const markLockBanner = document.getElementById('markLockBanner');
   const saveAttendanceBtn = document.getElementById('saveAttendanceBtn');
@@ -794,7 +795,7 @@ function renderAttendanceMarkingForm() {
 
   teamStudents.forEach(s => {
     let h1 = 'P', h2 = 'P', h3 = 'P', h4 = 'P', h5 = 'P';
-    const studentRecord = getStudentAttendanceRecord(s.id, date);
+    const studentRecord = getStudentAttendanceRecord(s.id, teamId, date);
     const isStudentLocked = isStudentMarkedInAnotherTeam(s.id, date, teamId);
     if (studentRecord) {
       const rec = studentRecord.studentAttendanceMap[s.id];
@@ -871,7 +872,7 @@ async function handleSaveAttendance() {
   const studentAttendanceMap = {};
   const index = appData.attendance.findIndex(a => a.teamId === teamId && a.date === date);
   const existingTeamRecord = index >= 0 ? appData.attendance[index] : null;
-  if (currentUser?.role !== 'admin' && existingTeamRecord?.locked !== false) {
+  if (existingTeamRecord && !canEditAttendanceRecord(existingTeamRecord, teamId)) {
     alert(`Attendance for ${teamId} on ${date} is already locked.`);
     return;
   }
@@ -922,12 +923,30 @@ async function handleUnlockAttendance() {
   if (currentUser.role !== 'admin') return;
   const teamId = document.getElementById('markTeamSelect').value;
   const date = document.getElementById('markDate').value;
+
   const record = appData.attendance.find(a => a.teamId === teamId && a.date === date);
 
   if (record) {
     record.locked = false;
+    record.unlockMode = 'admin';
     await saveAppData();
     alert('Attendance unlocked for editing by Admin!');
+    renderAttendanceMarkingForm();
+  }
+}
+
+async function handleInchargeUnlockAttendance() {
+  if (currentUser?.role !== 'admin') return;
+
+  const teamId = document.getElementById('markTeamSelect').value;
+  const date = document.getElementById('markDate').value;
+  const record = appData.attendance.find(a => a.teamId === teamId && a.date === date);
+
+  if (record) {
+    record.locked = false;
+    record.unlockMode = 'admin-incharge';
+    await saveAppData();
+    alert('Attendance unlocked for Admin and Student Incharge!');
     renderAttendanceMarkingForm();
   }
 }
