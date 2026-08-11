@@ -58,7 +58,7 @@ global.fetch = async () => { throw new Error('unexpected fetch'); };
 
 require('../app.js');
 
-const { getSortedFilteredAttendanceRows } = global;
+const { getSortedFilteredAttendanceRows, isStudentMarkedInAnotherTeam } = global;
 
  (async () => {
 const originalAppData = global.appData;
@@ -103,7 +103,12 @@ try {
   const result = getSortedFilteredAttendanceRows();
   assert.deepStrictEqual(result.rowList.map(record => record.teamName), ['Team Beta', 'Team Delta', 'Team Alpha', 'Team Gamma']);
 
-  console.log('attendance-order test passed');
+  assert.strictEqual(isStudentMarkedInAnotherTeam('s1', '2024-01-10', 'Team Beta'), true);
+  assert.strictEqual(isStudentMarkedInAnotherTeam('s1', '2024-01-10', 'Team Alpha'), false);
+  assert.strictEqual(isStudentMarkedInAnotherTeam('s1', '2024-02-14', 'Team Alpha'), true);
+  assert.strictEqual(isStudentMarkedInAnotherTeam('s1', '2024-01-11', 'Team Beta'), false);
+
+  console.log('attendance order test passed');
 } finally {
   global.appData = originalAppData;
 }

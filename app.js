@@ -736,8 +736,6 @@ function getStudentAttendanceRecord(studentId, teamId, date) {
 }
 
 function isStudentMarkedInAnotherTeam(studentId, date, teamId) {
-  if (currentUser?.role === 'admin') return false;
-
   return appData.attendance.some(record =>
     record.date === date && record.teamId !== teamId && record.locked !== false &&
     record.studentAttendanceMap?.[studentId]
@@ -1085,7 +1083,7 @@ function getSortedFilteredAttendanceRows() {
 }
 
 globalThis.getSortedFilteredAttendanceRows = getSortedFilteredAttendanceRows;
-
+globalThis.isStudentMarkedInAnotherTeam = isStudentMarkedInAnotherTeam;
 function renderRecordsTable() {
   const tbody = document.getElementById('recordsTbody');
   tbody.innerHTML = '';
