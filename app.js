@@ -23,6 +23,17 @@ const defaultAppData = {
 let appData = JSON.parse(JSON.stringify(defaultAppData));
 let currentUser = null;
 let currentTabId = 'dashboardTab';
+
+Object.defineProperty(globalThis, 'currentUser', {
+  configurable: true,
+  enumerable: true,
+  get() {
+    return currentUser;
+  },
+  set(value) {
+    currentUser = value;
+  }
+});
 let firestoreDb = null;
 let firestoreListenerRegistered = false;
 let firestoreListenerUnsubscribe = null;
@@ -760,7 +771,7 @@ function getStudentAttendanceRecord(studentId, teamId, date) {
 
 function isStudentMarkedInAnotherTeam(studentId, date, teamId) {
   return appData.attendance.some(record =>
-    record.date === date && record.teamId !== teamId && !isAttendanceRecordUnlocked(record) &&
+    record.date === date && record.teamId !== teamId &&
     record.studentAttendanceMap?.[studentId]
   );
 }
@@ -823,7 +834,7 @@ function renderAttendanceMarkingForm() {
   const unlockBtn = document.getElementById('unlockBtn');
   const inchargeUnlockBtn = document.getElementById('inchargeUnlockBtn');
   if (unlockBtn) unlockBtn.classList.toggle('hidden', !(existingRecord?.locked && currentUser?.role === 'admin'));
-  if (inchargeUnlockBtn) inchargeUnlockBtn.classList.toggle('hidden', !(existingRecord?.locked && canUnlockByIncharge));
+  if (inchargeUnlockBtn) inchargeUnlockBtn.classList.toggle('hidden', !(existingRecord?.locked && currentUser?.role === 'admin'));
 
   if (teamStudents.length === 0) {
     tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 2rem;">No students assigned to this Team.</td></tr>`;
@@ -944,6 +955,7 @@ async function handleSaveAttendance() {
     markedBy: currentUser.name || currentUser.username,
     locked: teamIsComplete,
     teamLocked: teamIsComplete,
+    unlockMode: teamIsComplete ? null : null,
     timestamp: new Date().toISOString()
   };
 
@@ -985,12 +997,13 @@ async function handleUnlockAttendance() {
   record.locked = false;
   record.unlockMode = 'admin';
   await saveAppData();
-  alert('Attendance unlocked for editing by Admin only!');
+  alert('Attendance record unlocked for Admin editing only!');
   renderAttendanceMarkingForm();
+  renderRecordsTable();
 }
 
 async function handleInchargeUnlockAttendance() {
-  if (!currentUser) return;
+  if (currentUser?.role !== 'admin') return;
 
   const teamId = document.getElementById('markTeamSelect').value;
   const date = document.getElementById('markDate').value;
@@ -1001,19 +1014,12 @@ async function handleInchargeUnlockAttendance() {
     return;
   }
 
-  const canUnlock = currentUser.role === 'admin' || (currentUser.role === 'incharge' && canUnlockAttendanceForUser(teamId, currentUser.role, currentUser));
-  if (!canUnlock) {
-    alert('You can only unlock attendance for your assigned team.');
-    return;
-  }
-
   record.locked = false;
-  record.unlockMode = 'admin-incharge';
+  record.unlockMode = 'admin';
   await saveAppData();
-  alert(currentUser.role === 'admin'
-    ? 'Attendance unlocked for Admin and Student Incharge!'
-    : `Attendance unlocked for ${teamId} by the assigned Student Incharge.`);
+  alert('Attendance record unlocked for Admin editing only!');
   renderAttendanceMarkingForm();
+  renderRecordsTable();
 }
 
 function renderNotifications() {
@@ -1180,6 +1186,7 @@ function getSortedFilteredAttendanceRows() {
 
 globalThis.getSortedFilteredAttendanceRows = getSortedFilteredAttendanceRows;
 globalThis.isStudentMarkedInAnotherTeam = isStudentMarkedInAnotherTeam;
+globalThis.renderAttendanceMarkingForm = renderAttendanceMarkingForm;
 function renderRecordsTable() {
   const tbody = document.getElementById('recordsTbody');
   tbody.innerHTML = '';
