@@ -749,13 +749,17 @@ function canMarkTeam(teamId) {
 function canEditAttendanceRecord(record, teamId) {
   if (!canMarkTeam(teamId)) return false;
   if (!record || !record.locked) return true;
-  if (record.unlockMode === 'admin' || record.unlockMode === 'admin-incharge') return currentUser?.role === 'admin';
+  if (record.unlockMode === 'admin') return currentUser?.role === 'admin';
+  if (record.unlockMode === 'admin-incharge') {
+    return currentUser?.role === 'admin' || (currentUser?.role === 'incharge' && getUserTeamIds(currentUser).includes(teamId));
+  }
   return false;
 }
 
 function isAttendanceRecordUnlocked(record) {
   if (!record || !record.locked) return true;
-  if (record?.unlockMode === 'admin' || record?.unlockMode === 'admin-incharge') return currentUser?.role === 'admin';
+  if (record?.unlockMode === 'admin') return currentUser?.role === 'admin';
+  if (record?.unlockMode === 'admin-incharge') return currentUser?.role === 'admin' || (currentUser?.role === 'incharge' && getUserTeamIds(currentUser).includes(record.teamId));
   return false;
 }
 
@@ -841,17 +845,26 @@ function renderAttendanceMarkingForm() {
   teamStudents.forEach(s => {
     let h1 = 'P', h2 = 'P', h3 = 'P', h4 = 'P', h5 = 'P';
     const studentRecord = getStudentAttendanceRecord(s.id, teamId, date);
-    const isStudentLocked = isStudentLockedInTeam(s.id, existingRecord) || isStudentMarkedInAnotherTeam(s.id, date, teamId);
+    // find if this student was marked in another team for the same date
+    const otherRecord = appData.attendance.find(a => a.date === date && a.teamId !== teamId && a.studentAttendanceMap?.[s.id]);
+    const isStudentLocked = isStudentLockedInTeam(s.id, existingRecord) || Boolean(otherRecord);
+
     if (studentRecord) {
       const rec = studentRecord.studentAttendanceMap[s.id];
       h1 = rec.h1 || 'P'; h2 = rec.h2 || 'P'; h3 = rec.h3 || 'P'; h4 = rec.h4 || 'P'; h5 = rec.h5 || 'P';
+    } else if (otherRecord) {
+      // show values from the other team and mark as locked
+      const rec = otherRecord.studentAttendanceMap[s.id];
+      h1 = rec.h1 || 'P'; h2 = rec.h2 || 'P'; h3 = rec.h3 || 'P'; h4 = rec.h4 || 'P'; h5 = rec.h5 || 'P';
     }
+
+    const markedFrom = otherRecord ? ` <small style="color:var(--text-muted)">(Marked in ${otherRecord.teamId})</small>` : '';
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td data-label="Roll No"><strong>${s.rollNumber}</strong></td>
       <td data-label="Register No">${s.registerNumber}</td>
-      <td data-label="Student Name">${s.name}</td>
+      <td data-label="Student Name">${s.name}${markedFrom}</td>
       <td data-label="Department">${s.deptName || 'Computer Science'}</td>
       <td data-label="Category"><span class="badge ${s.department === 'Aided' ? 'badge-aided' : 'badge-self'}">${s.department}</span></td>
       
@@ -969,6 +982,33 @@ async function handleSaveAttendance() {
     });
   }
 
+  // If a student-incharge performed the marking, add notifications for admin and for the incharge
+  if (currentUser?.role === 'incharge') {
+    appData.notifications = Array.isArray(appData.notifications) ? appData.notifications : [];
+    // Notify admin(s)
+    appData.notifications.unshift({
+      id: 'notification_' + Date.now() + '_admin',
+      type: 'incharge-marked-attendance',
+      teamId,
+      date,
+      senderId: currentUser.id,
+      message: `Student Incharge ${currentUser.name || currentUser.username} marked attendance for ${teamId} on ${date}.`,
+      read: false,
+      timestamp: new Date().toISOString()
+    });
+    // Notify the incharge (self) about locks/summary
+    appData.notifications.unshift({
+      id: 'notification_' + Date.now() + '_incharge',
+      type: 'incharge-attendance-saved',
+      teamId,
+      date,
+      senderId: currentUser.id,
+      message: `You marked attendance for ${teamId} on ${date}. Marked students are now locked across teams.`,
+      read: false,
+      timestamp: new Date().toISOString()
+    });
+  }
+
   if (index >= 0) appData.attendance[index] = newRecord;
   else appData.attendance.push(newRecord);
 
@@ -1015,9 +1055,10 @@ async function handleInchargeUnlockAttendance() {
   }
 
   record.locked = false;
-  record.unlockMode = 'admin';
+  // set to allow admin and assigned incharge to edit
+  record.unlockMode = 'admin-incharge';
   await saveAppData();
-  alert('Attendance record unlocked for Admin editing only.');
+  alert('Attendance record unlocked for Admin and assigned Student Incharge editing.');
   renderAttendanceMarkingForm();
   renderRecordsTable();
 }
@@ -1025,24 +1066,36 @@ async function handleInchargeUnlockAttendance() {
 function renderNotifications() {
   const notificationDot = document.querySelector('#notifBtn .notif-dot');
   if (!notificationDot) return;
-
-  const unreadCount = currentUser?.role === 'admin'
-    ? (appData.notifications || []).filter(notification => !notification.read).length
-    : 0;
+  let unreadCount = 0;
+  if (currentUser?.role === 'admin') {
+    unreadCount = (appData.notifications || []).filter(notification => !notification.read).length;
+  } else if (currentUser?.role === 'incharge') {
+    unreadCount = (appData.notifications || []).filter(notification => !notification.read && (
+      (notification.type && notification.type.startsWith('incharge')) || notification.senderId === currentUser.id
+    )).length;
+  }
   notificationDot.classList.toggle('hidden', unreadCount === 0);
   notificationDot.setAttribute('aria-label', unreadCount ? `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}` : 'No unread notifications');
 }
 
 async function handleNotificationsClick() {
-  if (currentUser?.role !== 'admin') return;
-
-  const notifications = (appData.notifications || []).filter(notification => notification.type === 'team-attendance-complete');
-  if (notifications.length === 0) {
-    alert('No team attendance notifications.');
+  // allow admin and incharge to view relevant notifications
+  const allNotifications = Array.isArray(appData.notifications) ? appData.notifications : [];
+  let notifications = [];
+  if (currentUser?.role === 'admin') {
+    notifications = allNotifications.filter(n => n.type === 'team-attendance-complete' || n.type === 'incharge-marked-attendance');
+  } else if (currentUser?.role === 'incharge') {
+    notifications = allNotifications.filter(n => (n.type && n.type.startsWith('incharge')) && (n.senderId === currentUser.id || n.type === 'incharge-attendance-saved'));
+  } else {
     return;
   }
 
-  alert(notifications.slice(0, 5).map(notification => notification.message).join('\n'));
+  if (notifications.length === 0) {
+    alert('No notifications.');
+    return;
+  }
+
+  alert(notifications.slice(0, 10).map(notification => notification.message).join('\n'));
   const unreadNotifications = notifications.filter(notification => !notification.read);
   unreadNotifications.forEach(notification => { notification.read = true; });
   if (unreadNotifications.length > 0) {
