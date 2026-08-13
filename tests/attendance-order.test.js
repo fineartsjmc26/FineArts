@@ -200,7 +200,15 @@ try {
     return makeElement(id);
   };
 
+  global.currentUser = {
+    id: 'u2',
+    username: 'incharge1',
+    role: 'incharge',
+    name: 'Student Incharge 1',
+    assignedTeamIds: ['Team Alpha'],
+  };
   globalThis.renderAttendanceMarkingForm();
+  assert.strictEqual(unlockBtn.classList.contains('hidden'), true);
   assert.strictEqual(inchargeUnlockBtn.classList.contains('hidden'), true);
 
   console.log('attendance order test passed');

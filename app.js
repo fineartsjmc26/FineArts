@@ -749,17 +749,13 @@ function canMarkTeam(teamId) {
 function canEditAttendanceRecord(record, teamId) {
   if (!canMarkTeam(teamId)) return false;
   if (!record || !record.locked) return true;
-  if (record.unlockMode === 'admin') return currentUser?.role === 'admin';
-  if (record.unlockMode === 'admin-incharge') {
-    return currentUser?.role === 'admin' || (currentUser?.role === 'incharge' && canUnlockAttendanceForUser(teamId, currentUser.role, currentUser));
-  }
+  if (record.unlockMode === 'admin' || record.unlockMode === 'admin-incharge') return currentUser?.role === 'admin';
   return false;
 }
 
 function isAttendanceRecordUnlocked(record) {
   if (!record || !record.locked) return true;
-  if (record?.unlockMode === 'admin') return currentUser?.role === 'admin';
-  if (record?.unlockMode === 'admin-incharge') return currentUser?.role === 'admin' || (currentUser?.role === 'incharge' && canUnlockAttendanceForUser(record.teamId, currentUser.role, currentUser));
+  if (record?.unlockMode === 'admin' || record?.unlockMode === 'admin-incharge') return currentUser?.role === 'admin';
   return false;
 }
 
@@ -833,8 +829,9 @@ function renderAttendanceMarkingForm() {
 
   const unlockBtn = document.getElementById('unlockBtn');
   const inchargeUnlockBtn = document.getElementById('inchargeUnlockBtn');
-  if (unlockBtn) unlockBtn.classList.toggle('hidden', !(existingRecord?.locked && currentUser?.role === 'admin'));
-  if (inchargeUnlockBtn) inchargeUnlockBtn.classList.toggle('hidden', !(existingRecord?.locked && currentUser?.role === 'admin'));
+  const isAdminUnlockVisible = Boolean(existingRecord?.locked && currentUser?.role === 'admin');
+  if (unlockBtn) unlockBtn.classList.toggle('hidden', !isAdminUnlockVisible);
+  if (inchargeUnlockBtn) inchargeUnlockBtn.classList.toggle('hidden', !isAdminUnlockVisible);
 
   if (teamStudents.length === 0) {
     tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 2rem;">No students assigned to this Team.</td></tr>`;
@@ -1003,7 +1000,10 @@ async function handleUnlockAttendance() {
 }
 
 async function handleInchargeUnlockAttendance() {
-  if (currentUser?.role !== 'admin') return;
+  if (currentUser?.role !== 'admin') {
+    alert('Only admin users can control the unlock buttons.');
+    return;
+  }
 
   const teamId = document.getElementById('markTeamSelect').value;
   const date = document.getElementById('markDate').value;
@@ -1017,7 +1017,7 @@ async function handleInchargeUnlockAttendance() {
   record.locked = false;
   record.unlockMode = 'admin';
   await saveAppData();
-  alert('Attendance record unlocked for Admin editing only!');
+  alert('Attendance record unlocked for Admin editing only.');
   renderAttendanceMarkingForm();
   renderRecordsTable();
 }
