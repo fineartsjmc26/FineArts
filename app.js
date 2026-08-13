@@ -439,6 +439,16 @@ function initUIEvents() {
   document.getElementById('unlockBtn').addEventListener('click', handleUnlockAttendance);
   document.getElementById('inchargeUnlockBtn').addEventListener('click', handleInchargeUnlockAttendance);
   document.getElementById('notifBtn')?.addEventListener('click', handleNotificationsClick);
+  document.getElementById('notifClearBtn')?.addEventListener('click', async () => {
+    if (!currentUser) return;
+    const notifications = getVisibleNotificationsForCurrentUser();
+    if (notifications.length === 0) {
+      alert('No notifications to clear.');
+      return;
+    }
+
+    await clearNotificationsForCurrentUser();
+  });
 
   // Calendar Date Filter and Category Filters in Viewing Area
   ['filterDate', 'filterTeam', 'filterDeptName', 'filterDept', 'filterYear'].forEach(id => {
@@ -727,6 +737,21 @@ function getUserTeamIds(user) {
   const teamIds = Array.isArray(user?.assignedTeamIds) ? [...user.assignedTeamIds] : [];
   if (user?.assignedTeamId && !teamIds.includes(user.assignedTeamId)) teamIds.push(user.assignedTeamId);
   return teamIds;
+}
+
+// Notification helpers: support per-user "readBy" without breaking existing boolean `read` flag.
+function isNotificationReadByUser(notification, userId) {
+  if (!notification) return false;
+  if (notification.read === true) return true; // legacy global-read
+  if (Array.isArray(notification.readBy)) return notification.readBy.includes(userId);
+  return false;
+}
+
+function markNotificationReadByUser(notification, userId) {
+  if (!notification) return;
+  if (notification.read === true) return; // already globally read
+  if (!Array.isArray(notification.readBy)) notification.readBy = [];
+  if (!notification.readBy.includes(userId)) notification.readBy.push(userId);
 }
 
 function canUnlockAttendanceForUser(teamId, role = currentUser?.role, user = currentUser) {
@@ -1063,32 +1088,61 @@ async function handleInchargeUnlockAttendance() {
   renderRecordsTable();
 }
 
+function getVisibleNotificationsForCurrentUser() {
+  if (!currentUser) return [];
+
+  const allNotifications = Array.isArray(appData.notifications) ? appData.notifications : [];
+  if (currentUser.role === 'admin') {
+    return allNotifications.filter(n => n.type === 'team-attendance-complete' || n.type === 'incharge-marked-attendance');
+  }
+
+  if (currentUser.role === 'incharge') {
+    return allNotifications.filter(n => (n.type && n.type.startsWith('incharge')) && (n.senderId === currentUser.id || n.type === 'incharge-attendance-saved'));
+  }
+
+  return [];
+}
+
+async function clearNotificationsForCurrentUser() {
+  if (!currentUser) return;
+
+  const notifications = getVisibleNotificationsForCurrentUser();
+  if (notifications.length === 0) return;
+
+  appData.notifications = (Array.isArray(appData.notifications) ? appData.notifications : []).filter(notification =>
+    !notifications.some(item => item.id === notification.id)
+  );
+
+  await saveAppData();
+  renderNotifications();
+}
+globalThis.clearNotificationsForCurrentUser = clearNotificationsForCurrentUser;
+
 function renderNotifications() {
   const notificationDot = document.querySelector('#notifBtn .notif-dot');
+  const clearBtn = document.getElementById('notifClearBtn');
   if (!notificationDot) return;
+
   let unreadCount = 0;
   if (currentUser?.role === 'admin') {
-    unreadCount = (appData.notifications || []).filter(notification => !notification.read).length;
+    unreadCount = (appData.notifications || []).filter(notification => !isNotificationReadByUser(notification, currentUser.id)).length;
   } else if (currentUser?.role === 'incharge') {
-    unreadCount = (appData.notifications || []).filter(notification => !notification.read && (
+    unreadCount = (appData.notifications || []).filter(notification => !isNotificationReadByUser(notification, currentUser.id) && (
       (notification.type && notification.type.startsWith('incharge')) || notification.senderId === currentUser.id
     )).length;
   }
+
   notificationDot.classList.toggle('hidden', unreadCount === 0);
   notificationDot.setAttribute('aria-label', unreadCount ? `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}` : 'No unread notifications');
+
+  if (clearBtn) {
+    const visibleNotifications = getVisibleNotificationsForCurrentUser();
+    clearBtn.classList.toggle('hidden', visibleNotifications.length === 0);
+  }
 }
 
 async function handleNotificationsClick() {
-  // allow admin and incharge to view relevant notifications
-  const allNotifications = Array.isArray(appData.notifications) ? appData.notifications : [];
-  let notifications = [];
-  if (currentUser?.role === 'admin') {
-    notifications = allNotifications.filter(n => n.type === 'team-attendance-complete' || n.type === 'incharge-marked-attendance');
-  } else if (currentUser?.role === 'incharge') {
-    notifications = allNotifications.filter(n => (n.type && n.type.startsWith('incharge')) && (n.senderId === currentUser.id || n.type === 'incharge-attendance-saved'));
-  } else {
-    return;
-  }
+  const notifications = getVisibleNotificationsForCurrentUser();
 
   if (notifications.length === 0) {
     alert('No notifications.');
@@ -1096,8 +1150,8 @@ async function handleNotificationsClick() {
   }
 
   alert(notifications.slice(0, 10).map(notification => notification.message).join('\n'));
-  const unreadNotifications = notifications.filter(notification => !notification.read);
-  unreadNotifications.forEach(notification => { notification.read = true; });
+  const unreadNotifications = notifications.filter(notification => !isNotificationReadByUser(notification, currentUser.id));
+  unreadNotifications.forEach(notification => { markNotificationReadByUser(notification, currentUser.id); });
   if (unreadNotifications.length > 0) {
     await saveAppData();
     renderNotifications();
@@ -1562,7 +1616,9 @@ async function removeSection(sectionName) {
 // Teams Management
 function renderTeamsTags() {
   const container = document.getElementById('teamsTagList');
-  container.innerHTML = appData.teams.map(t => `
+  // Add a short rules note for teams: notifications viewed by Admin are cleared for that admin only.
+  const note = `<div class="team-rules-note" style="padding:0.5rem 0; color:var(--text-muted); font-size:0.9rem;">🔔 Notification rule: When an Admin views notifications, they are marked as seen for that Admin only.</div>`;
+  container.innerHTML = note + appData.teams.map(t => `
     <div class="tag-item">
       <span>👥 ${t}</span>
       <button class="tag-remove" onclick="removeTeam('${t}')">&times;</button>

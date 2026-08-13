@@ -542,6 +542,23 @@ a { color: inherit; }
   border: 2px solid var(--surface);
 }
 
+.notif-clear-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+}
+
+.notif-clear-btn:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
 .profile-menu-wrapper {
   position: relative;
 }

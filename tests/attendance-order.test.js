@@ -66,6 +66,11 @@ const originalStudents = global.appData?.students;
 
 try {
   global.appData = {
+    notifications: [
+      { id: 'n1', type: 'team-attendance-complete', message: 'Team 1 complete', read: false },
+      { id: 'n2', type: 'incharge-attendance-saved', senderId: 'u2', message: 'Team 2 saved', read: false },
+      { id: 'n3', type: 'other-event', message: 'Other event', read: false },
+    ],
     attendance: [
       {
         teamId: 'Team Alpha',
@@ -112,6 +117,18 @@ try {
   assert.strictEqual(isStudentMarkedInAnotherTeam('s1', '2024-01-10', 'Team Alpha'), false);
   assert.strictEqual(isStudentMarkedInAnotherTeam('s1', '2024-02-14', 'Team Alpha'), true);
   assert.strictEqual(isStudentMarkedInAnotherTeam('s1', '2024-01-11', 'Team Beta'), false);
+
+  global.currentUser = { id: 'u2', username: 'incharge1', role: 'incharge', name: 'Student Incharge 1', assignedTeamIds: ['Team Alpha'] };
+  global.saveAppData = async () => {};
+  global.renderNotifications = () => {};
+  global.renderNotificationMenu = () => {};
+  global.appData.notifications = [
+    { id: 'n1', type: 'team-attendance-complete', message: 'Team 1 complete', read: false },
+    { id: 'n2', type: 'incharge-attendance-saved', senderId: 'u2', message: 'Team 2 saved', read: false },
+    { id: 'n3', type: 'other-event', message: 'Other event', read: false },
+  ];
+  clearNotificationsForCurrentUser();
+  assert.deepStrictEqual(global.appData.notifications.map(n => n.id), ['n1', 'n3']);
 
   const classList = () => {
     const set = new Set();
