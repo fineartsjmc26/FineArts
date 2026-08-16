@@ -1,6 +1,0 @@
-# Example values - copy to terraform.tfvars and replace with real values
-aws_region = "us-east-1"
-vpc_id = "vpc-xxxxxxxx"
-public_subnet_ids = ["subnet-aaaa1111","subnet-bbbb2222"]
-alb_security_group = "sg-xxxxxxxx"
-instance_ids = ["i-0123456789abcdef0","i-0fedcba9876543210"]

@@ -463,6 +463,10 @@ function initUIEvents() {
 
   document.getElementById('deleteDateBtn').addEventListener('click', deleteAttendanceDate);
   document.getElementById('deleteMonthBtn').addEventListener('click', deleteAttendanceMonth);
+  const onlyFiveHourDatesBtn = document.getElementById('onlyFiveHourDatesBtn');
+  if (onlyFiveHourDatesBtn) {
+    onlyFiveHourDatesBtn.addEventListener('click', toggleOnlyFiveHourDatesFilter);
+  }
   document.getElementById('exportExcelBtn').addEventListener('click', exportToExcel);
   document.getElementById('studentSearchInput').addEventListener('input', renderStudentsTable);
   document.getElementById('clearStudentSearchBtn').addEventListener('click', () => {
@@ -813,6 +817,49 @@ function isTeamAttendanceComplete(teamId, record) {
 }
 
 // 5-Hour Attendance Marking Form
+function getYearSortValue(yearValue) {
+  const value = String(yearValue ?? '').trim().toUpperCase();
+  if (!value) return Number.MAX_SAFE_INTEGER;
+
+  const normalized = value.replace(/\s+YEAR$/, '').replace(/\s+/g, ' ');
+  const map = {
+    '1ST': 1, 'FIRST': 1, 'I': 1,
+    '2ND': 2, 'SECOND': 2, 'II': 2,
+    '3RD': 3, 'THIRD': 3, 'III': 3,
+    '4TH': 4, 'FOURTH': 4, 'IV': 4,
+  };
+
+  if (map[normalized] !== undefined) return map[normalized];
+  const asNumber = Number.parseInt(normalized.replace(/[^0-9]/g, ''), 10);
+  return Number.isNaN(asNumber) ? Number.MAX_SAFE_INTEGER : asNumber;
+}
+
+function sortStudents(left, right) {
+  const leftCategoryRank = left.department === 'Aided' ? 0 : left.department === 'Self-Finance' ? 1 : 2;
+  const rightCategoryRank = right.department === 'Aided' ? 0 : right.department === 'Self-Finance' ? 1 : 2;
+  if (leftCategoryRank !== rightCategoryRank) return leftCategoryRank - rightCategoryRank;
+
+  const leftYear = getYearSortValue(left.year);
+  const rightYear = getYearSortValue(right.year);
+  if (leftYear !== rightYear) return leftYear - rightYear;
+
+  const leftDeptName = String(left.deptName || '').trim().toUpperCase();
+  const rightDeptName = String(right.deptName || '').trim().toUpperCase();
+  if (leftDeptName !== rightDeptName) return leftDeptName.localeCompare(rightDeptName);
+
+  const leftName = String(left.name || '').trim().toUpperCase();
+  const rightName = String(right.name || '').trim().toUpperCase();
+  if (leftName !== rightName) return leftName.localeCompare(rightName);
+
+  const leftRoll = String(left.rollNumber || '').trim();
+  const rightRoll = String(right.rollNumber || '').trim();
+  if (leftRoll !== rightRoll) return leftRoll.localeCompare(rightRoll);
+
+  const leftRegister = String(left.registerNumber || '').trim();
+  const rightRegister = String(right.registerNumber || '').trim();
+  return leftRegister.localeCompare(rightRegister);
+}
+
 function renderAttendanceMarkingForm() {
   const teamId = document.getElementById('markTeamSelect').value;
   const date = document.getElementById('markDate').value;
@@ -825,10 +872,10 @@ function renderAttendanceMarkingForm() {
 
   if (!teamId || !date) return;
 
-  const teamStudents = appData.students.filter(s => getStudentTeamIds(s).includes(teamId)
+  const teamStudents = [...appData.students.filter(s => getStudentTeamIds(s).includes(teamId)
     && (categoryFilter === 'ALL' || s.department === categoryFilter)
     && (deptNameFilter === 'ALL' || s.deptName === deptNameFilter)
-    && (yearFilter === 'ALL' || s.year === yearFilter));
+    && (yearFilter === 'ALL' || s.year === yearFilter))].sort(sortStudents);
   document.getElementById('teamStudentCountTitle').textContent = `Team Students (${teamStudents.length})`;
 
   const existingRecord = appData.attendance.find(a => a.teamId === teamId && a.date === date);
@@ -1240,6 +1287,27 @@ function getSortedAttendanceRecords() {
     .map(({ att }) => att);
 }
 
+function isOnlyFiveHourAttendanceFilterEnabled() {
+  const btn = document.getElementById('onlyFiveHourDatesBtn');
+  if (!btn) return false;
+  if (btn.dataset && Object.prototype.hasOwnProperty.call(btn.dataset, 'active')) {
+    return btn.dataset.active === 'true';
+  }
+  return btn.classList?.contains('active') || false;
+}
+
+function toggleOnlyFiveHourDatesFilter() {
+  const btn = document.getElementById('onlyFiveHourDatesBtn');
+  if (!btn) return;
+
+  const active = !isOnlyFiveHourAttendanceFilterEnabled();
+  btn.dataset.active = String(active);
+  btn.setAttribute('aria-pressed', String(active));
+  btn.textContent = active ? '5-Hour Export: ON' : '5-Hour Export: OFF';
+  btn.classList.toggle('active', active);
+  renderRecordsTable();
+}
+
 function getSortedFilteredAttendanceRows() {
   const filterDateVal = document.getElementById('filterDate').value;
   const filterTeamVal = document.getElementById('filterTeam').value;
@@ -1297,6 +1365,7 @@ function getSortedFilteredAttendanceRows() {
 globalThis.getSortedFilteredAttendanceRows = getSortedFilteredAttendanceRows;
 globalThis.isStudentMarkedInAnotherTeam = isStudentMarkedInAnotherTeam;
 globalThis.renderAttendanceMarkingForm = renderAttendanceMarkingForm;
+globalThis.sortStudents = sortStudents;
 function renderRecordsTable() {
   const tbody = document.getElementById('recordsTbody');
   tbody.innerHTML = '';
@@ -1342,7 +1411,31 @@ function exportToExcel() {
   const filterDeptNameVal = document.getElementById('filterDeptName').value;
   const filterDeptVal = document.getElementById('filterDept').value;
   const { rowList } = getSortedFilteredAttendanceRows();
-  const exportData = rowList.map(row => ({
+  const onlyFiveHourActive = Boolean(document.getElementById('onlyFiveHourDatesBtn')?.dataset?.active === 'true');
+
+  const exportRows = onlyFiveHourActive
+    ? [...rowList].sort((left, right) => {
+        const leftStudent = appData.students.find(student => student.id === left.studentId) || {
+          department: left.department,
+          deptName: left.deptName,
+          year: left.year,
+          name: left.studentName,
+          rollNumber: left.rollNumber,
+          registerNumber: left.registerNumber,
+        };
+        const rightStudent = appData.students.find(student => student.id === right.studentId) || {
+          department: right.department,
+          deptName: right.deptName,
+          year: right.year,
+          name: right.studentName,
+          rollNumber: right.rollNumber,
+          registerNumber: right.registerNumber,
+        };
+        return sortStudents(leftStudent, rightStudent);
+      })
+    : rowList;
+
+  const exportData = exportRows.map(row => ({
     'Date': row.date,
     'Team': row.teamName,
     'Student Name': row.studentName,

@@ -1,0 +1,21 @@
+﻿[
+    {
+        "pid":  980,
+        "port":  5000
+    },
+    {
+        "pid":  1776,
+        "port":  5001
+    },
+    {
+        "pid":  12132,
+        "port":  5002
+    },
+    {
+        "port":  8080,
+        "out":  "C:\\Users\\Administrator\\Desktop\\attendance_app_web_firebase_redesigned (2)\\attendance_app_web_firebase_redesigned\\infra\\load-balancers\\nginx\\scripts\\proxy-out.log",
+        "pid":  11584,
+        "err":  "C:\\Users\\Administrator\\Desktop\\attendance_app_web_firebase_redesigned (2)\\attendance_app_web_firebase_redesigned\\infra\\load-balancers\\nginx\\scripts\\proxy-err.log",
+        "role":  "proxy"
+    }
+]

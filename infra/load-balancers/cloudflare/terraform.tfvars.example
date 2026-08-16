@@ -1,4 +1,0 @@
-# Example Cloudflare settings for API-driven configuration
-cloudflare_account_id = "<ACCOUNT_ID>"
-cloudflare_zone = "attendance.example.com"
-cloudflare_api_token = "<CLOUDFLARE_API_TOKEN>"

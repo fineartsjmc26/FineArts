@@ -58,7 +58,7 @@ global.fetch = async () => { throw new Error('unexpected fetch'); };
 
 require('../app.js');
 
-const { getSortedFilteredAttendanceRows, isStudentMarkedInAnotherTeam } = global;
+const { getSortedFilteredAttendanceRows, isStudentMarkedInAnotherTeam, sortStudents } = global;
 
  (async () => {
 const originalAppData = global.appData;
@@ -129,6 +129,23 @@ try {
   ];
   clearNotificationsForCurrentUser();
   assert.deepStrictEqual(global.appData.notifications.map(n => n.id), ['n1', 'n3']);
+
+  assert.ok(sortStudents instanceof Function);
+  const unsortedStudents = [
+    { name: 'Zoe', department: 'Self-Finance', deptName: 'Physics', rollNumber: '12', registerNumber: 'B400', year: '2nd Year' },
+    { name: 'Alice', department: 'Aided', deptName: 'Computer Science', rollNumber: '3', registerNumber: 'A100', year: '1st Year' },
+    { name: 'Bob', department: 'Aided', deptName: 'Computer Science', rollNumber: '2', registerNumber: 'A101', year: '1st Year' },
+    { name: 'Carol', department: 'Self-Finance', deptName: 'Biology', rollNumber: '7', registerNumber: 'B200', year: '1st Year' },
+    { name: 'Dora', department: 'Aided', deptName: 'Maths', rollNumber: '5', registerNumber: 'A200', year: '2nd Year' },
+  ];
+  const sorted = [...unsortedStudents].sort(sortStudents);
+  assert.deepStrictEqual(sorted.map(s => `${s.department}|${s.year}|${s.deptName}|${s.name}`), [
+    'Aided|1st Year|Computer Science|Alice',
+    'Aided|1st Year|Computer Science|Bob',
+    'Aided|2nd Year|Maths|Dora',
+    'Self-Finance|1st Year|Biology|Carol',
+    'Self-Finance|2nd Year|Physics|Zoe',
+  ]);
 
   const classList = () => {
     const set = new Set();
