@@ -1,0 +1,89 @@
+name: Terraform AWS Load Balancer
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'terraform action (plan|apply)'
+        required: true
+        default: 'plan'
+
+jobs:
+  plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.7
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Prepare tfvars
+        run: |
+          mkdir -p infra/load-balancers/aws/.tf
+          cat > infra/load-balancers/aws/terraform.tfvars <<EOF
+          aws_region = "${{ secrets.AWS_REGION }}"
+          vpc_id = "${{ secrets.AWS_VPC_ID }}"
+          public_subnet_ids = [${{ secrets.AWS_PUBLIC_SUBNET_IDS }}]
+          alb_security_group = "${{ secrets.AWS_ALB_SG }}"
+          instance_ids = [${{ secrets.AWS_INSTANCE_IDS }}]
+          EOF
+        shell: bash
+
+      - name: Terraform Init
+        working-directory: infra/load-balancers/aws
+        run: terraform init -input=false
+
+      - name: Terraform Plan
+        working-directory: infra/load-balancers/aws
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Upload plan artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aws-tfplan
+          path: infra/load-balancers/aws/tfplan
+
+  apply:
+    name: Terraform Apply (requires approval)
+    needs: plan
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.action == 'apply' }}
+    environment:
+      name: aws-production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.7
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: aws-tfplan
+          path: infra/load-balancers/aws/
+
+      - name: Terraform Apply
+        working-directory: infra/load-balancers/aws
+        run: terraform apply -input=false -auto-approve tfplan

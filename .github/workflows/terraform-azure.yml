@@ -1,0 +1,83 @@
+name: Terraform Azure Load Balancer
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'terraform action (plan|apply)'
+        required: true
+        default: 'plan'
+
+jobs:
+  plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.7
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Prepare tfvars
+        run: |
+          cat > infra/load-balancers/azure/terraform.tfvars <<EOF
+          rg_name = "${{ secrets.AZURE_RG_NAME }}"
+          location = "${{ secrets.AZURE_LOCATION }}"
+          appgw_subnet_id = "${{ secrets.AZURE_APPGW_SUBNET_ID }}"
+          backend_ips = [${{ secrets.AZURE_BACKEND_IPS }}]
+          EOF
+        shell: bash
+
+      - name: Terraform Init
+        working-directory: infra/load-balancers/azure
+        run: terraform init -input=false
+
+      - name: Terraform Plan
+        working-directory: infra/load-balancers/azure
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Upload plan artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: azure-tfplan
+          path: infra/load-balancers/azure/tfplan
+
+  apply:
+    name: Terraform Apply (requires approval)
+    needs: plan
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.action == 'apply' }}
+    environment:
+      name: azure-production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.7
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: azure-tfplan
+          path: infra/load-balancers/azure/
+
+      - name: Terraform Apply
+        working-directory: infra/load-balancers/azure
+        run: terraform apply -input=false -auto-approve tfplan

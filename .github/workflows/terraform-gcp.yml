@@ -1,0 +1,82 @@
+name: Terraform GCP Load Balancer
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'terraform action (plan|apply)'
+        required: true
+        default: 'plan'
+
+jobs:
+  plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.7
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+
+      - name: Prepare tfvars
+        run: |
+          cat > infra/load-balancers/gcp/terraform.tfvars <<EOF
+          gcp_project = "${{ secrets.GCP_PROJECT }}"
+          gcp_region = "${{ secrets.GCP_REGION }}"
+          instance_group_self_link = "${{ secrets.GCP_INSTANCE_GROUP_SELF_LINK }}"
+          EOF
+        shell: bash
+
+      - name: Terraform Init
+        working-directory: infra/load-balancers/gcp
+        run: terraform init -input=false
+
+      - name: Terraform Plan
+        working-directory: infra/load-balancers/gcp
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Upload plan artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gcp-tfplan
+          path: infra/load-balancers/gcp/tfplan
+
+  apply:
+    name: Terraform Apply (requires approval)
+    needs: plan
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.action == 'apply' }}
+    environment:
+      name: gcp-production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.7
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gcp-tfplan
+          path: infra/load-balancers/gcp/
+
+      - name: Terraform Apply
+        working-directory: infra/load-balancers/gcp
+        run: terraform apply -input=false -auto-approve tfplan
