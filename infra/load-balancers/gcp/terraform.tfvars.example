@@ -1,0 +1,4 @@
+# Example values - copy to terraform.tfvars and replace with real values
+gcp_project = "my-gcp-project"
+gcp_region = "us-central1"
+instance_group_self_link = "https://www.googleapis.com/compute/v1/projects/.../zones/.../instanceGroups/..."

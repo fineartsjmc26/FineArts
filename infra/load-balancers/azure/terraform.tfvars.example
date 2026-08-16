@@ -1,0 +1,5 @@
+# Example values - copy to terraform.tfvars and replace with real values
+rg_name = "attendance-rg"
+location = "eastus"
+appgw_subnet_id = "/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/<subnet>"
+backend_ips = ["10.0.0.10", "10.0.0.11"]
