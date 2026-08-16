@@ -430,7 +430,6 @@ function initUIEvents() {
   document.getElementById('markAllAbsentBtn').addEventListener('click', () => setAll5Hours('A'));
 
   document.getElementById('saveAttendanceBtn').addEventListener('click', handleSaveAttendance);
-  document.getElementById('lockTeamBtn')?.addEventListener('click', handleLockTeamAttendance);
   const saveAttendanceFab = document.getElementById('saveAttendanceFab');
   if (saveAttendanceFab) {
     saveAttendanceFab.addEventListener('click', () => {
@@ -984,14 +983,17 @@ async function handleSaveAttendance() {
     return;
   }
 
+  // When saved by an incharge or admin, lock the team's entered attendance immediately
   const teamIsComplete = isTeamAttendanceComplete(teamId, { studentAttendanceMap });
   const newRecord = {
     id: index >= 0 ? appData.attendance[index].id : 'att_' + Date.now(),
     teamId, date, studentAttendanceMap,
     markedBy: currentUser.name || currentUser.username,
-    locked: teamIsComplete,
-    teamLocked: teamIsComplete,
-    unlockMode: teamIsComplete ? null : null,
+    // lock the record on save to prevent further changes unless unlocked by Admin
+    locked: true,
+    teamLocked: true,
+    // default unlock mode requires Admin to unlock; Admin can later set 'admin-incharge' via button
+    unlockMode: 'admin',
     timestamp: new Date().toISOString()
   };
 
@@ -1042,89 +1044,6 @@ async function handleSaveAttendance() {
   alert(teamIsComplete
     ? `5-Hour attendance saved and the entire team is locked for ${teamId} (${date})!`
     : `5-Hour attendance saved. Marked students are locked; the team remains open for the remaining students.`);
-  renderAttendanceMarkingForm();
-  renderRecordsTable();
-}
-
-async function handleLockTeamAttendance() {
-  const teamId = document.getElementById('markTeamSelect').value;
-  if (!canMarkTeam(teamId)) {
-    alert('You can only lock attendance for teams allotted to you by an administrator.');
-    return;
-  }
-
-  const date = document.getElementById('markDate').value;
-  const categoryFilter = document.getElementById('markCategoryFilter')?.value || 'ALL';
-  const deptNameFilter = document.getElementById('markDeptNameFilter')?.value || 'ALL';
-  const yearFilter = document.getElementById('markYearFilter')?.value || 'ALL';
-  const teamStudents = appData.students.filter(s => getStudentTeamIds(s).includes(teamId)
-    && (categoryFilter === 'ALL' || s.department === categoryFilter)
-    && (deptNameFilter === 'ALL' || s.deptName === deptNameFilter)
-    && (yearFilter === 'ALL' || s.year === yearFilter));
-
-  if (teamStudents.length === 0) {
-    alert('No students to lock for this team!');
-    return;
-  }
-
-  const studentAttendanceMap = {};
-  const index = appData.attendance.findIndex(a => a.teamId === teamId && a.date === date);
-  const existingTeamRecord = index >= 0 ? appData.attendance[index] : null;
-
-  if (existingTeamRecord?.studentAttendanceMap) {
-    Object.assign(studentAttendanceMap, existingTeamRecord.studentAttendanceMap);
-  }
-
-  teamStudents.forEach(s => {
-    // do not override if student is already marked in another team
-    if (isStudentMarkedInAnotherTeam(s.id, date, teamId)) return;
-
-    const btnH1 = document.querySelector(`.pa-toggle-btn[data-student="${s.id}"][data-hour="1"]`);
-    const btnH2 = document.querySelector(`.pa-toggle-btn[data-student="${s.id}"][data-hour="2"]`);
-    const btnH3 = document.querySelector(`.pa-toggle-btn[data-student="${s.id}"][data-hour="3"]`);
-    const btnH4 = document.querySelector(`.pa-toggle-btn[data-student="${s.id}"][data-hour="4"]`);
-    const btnH5 = document.querySelector(`.pa-toggle-btn[data-student="${s.id}"][data-hour="5"]`);
-
-    studentAttendanceMap[s.id] = {
-      h1: btnH1 ? btnH1.textContent : 'P',
-      h2: btnH2 ? btnH2.textContent : 'P',
-      h3: btnH3 ? btnH3.textContent : 'P',
-      h4: btnH4 ? btnH4.textContent : 'P',
-      h5: btnH5 ? btnH5.textContent : 'P'
-    };
-  });
-
-  const newRecord = {
-    id: index >= 0 ? appData.attendance[index].id : 'att_' + Date.now(),
-    teamId, date, studentAttendanceMap,
-    markedBy: currentUser.name || currentUser.username,
-    locked: true,
-    teamLocked: true,
-    // only admin can unlock this by default
-    unlockMode: 'admin',
-    timestamp: new Date().toISOString()
-  };
-
-  if (index >= 0) appData.attendance[index] = newRecord;
-  else appData.attendance.push(newRecord);
-
-  // notify admin if incharge locked the team
-  if (currentUser?.role === 'incharge') {
-    appData.notifications = Array.isArray(appData.notifications) ? appData.notifications : [];
-    appData.notifications.unshift({
-      id: 'notification_' + Date.now() + '_lock',
-      type: 'incharge-locked-team',
-      teamId,
-      date,
-      senderId: currentUser.id,
-      message: `Student Incharge ${currentUser.name || currentUser.username} locked attendance for ${teamId} on ${date}.`,
-      read: false,
-      timestamp: new Date().toISOString()
-    });
-  }
-
-  await saveAppData();
-  alert(`Attendance for ${teamId} on ${date} is now locked. No further changes allowed.`);
   renderAttendanceMarkingForm();
   renderRecordsTable();
 }
