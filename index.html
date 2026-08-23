@@ -419,9 +419,14 @@
             <h2>Attendance Stored Records (Data Viewing Area)</h2>
             <p style="color: var(--text-muted); font-size: 0.85rem;">Select any date from the calendar to view stored attendance history</p>
           </div>
-          <button class="btn btn-success" id="exportExcelBtn">
-            📥 Export Filtered Data to Excel (.xlsx)
-          </button>
+          <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-sm" id="onlyFiveHourDatesBtn" type="button" data-active="false" aria-pressed="false">
+              5-Hour Export: OFF
+            </button>
+            <button class="btn btn-success" id="exportExcelBtn">
+              📥 Export Filtered Data to Excel (.xlsx)
+            </button>
+          </div>
         </div>
 
         <!-- Categorize & Filter Bar (With Calendar Date Picker) -->
