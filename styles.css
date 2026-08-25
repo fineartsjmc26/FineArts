@@ -27,17 +27,39 @@
   --radius-lg: 20px;
   --radius-xl: 24px;
 
+  /* Type scale (reduce distinct font-sizes across the UI) */
+  --fs-xl: 2rem;    /* largest numeric display */
+  --fs-lg: 1.4rem;  /* headings / prominent */
+  --fs-md: 1rem;    /* body / card titles */
+  --fs-sm: 0.88rem; /* labels / buttons */
+  --fs-xs: 0.72rem; /* metadata / pills */
+
+  /* Button sizing */
+  --btn-h: 44px;
+
   --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.04);
   --shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
   --shadow-md: 0 16px 40px rgba(15, 23, 42, 0.08);
   --shadow-lg: 0 24px 60px rgba(15, 23, 42, 0.12);
 
-  --sidebar-w: 268px;
-  --sidebar-w: 280px;
+  --sidebar-w: 240px;
   --sidebar-w-collapsed: 82px;
   --header-h: 74px;
 
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Accessibility helper: visually hidden but available to screen readers */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
 }
 
 [data-theme="dark"] {
@@ -213,7 +235,7 @@ a { color: inherit; }
   width: 56px;
   height: 56px;
   min-width: 56px;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   background: linear-gradient(135deg, var(--primary), var(--purple));
   display: flex;
   align-items: center;
@@ -229,7 +251,7 @@ a { color: inherit; }
   width: 40px;
   height: 40px;
   min-width: 40px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   font-size: 1rem;
 }
 
@@ -329,7 +351,7 @@ a { color: inherit; }
   background: transparent;
   border: none;
   color: var(--text-muted);
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-radius: var(--radius-sm);
   font-size: 0.88rem;
   font-weight: 600;
@@ -345,7 +367,7 @@ a { color: inherit; }
 .tab-btn .nav-icon {
   width: 34px;
   height: 34px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: rgba(148, 163, 184, 0.12);
   display: grid;
   place-items: center;
@@ -651,12 +673,12 @@ a { color: inherit; }
 }
 
 .card {
-  background: var(--surface);
+  font-size: var(--fs-lg);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 1.75rem;
   margin-bottom: 1.5rem;
-  box-shadow: var(--shadow);
+  font-size: var(--fs-md);
   transition: box-shadow 0.2s var(--ease);
 }
 
@@ -686,6 +708,7 @@ a { color: inherit; }
   box-shadow: var(--shadow);
   overflow: hidden;
   position: relative;
+  align-items: center;
 }
 .hero-card::after {
   content: '';
@@ -714,10 +737,9 @@ a { color: inherit; }
   color: var(--primary);
   padding: 0.35rem 0.65rem;
   border-radius: 999px;
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   margin-bottom: 0.8rem;
 }
 .hero-actions {
@@ -765,9 +787,9 @@ a { color: inherit; }
   letter-spacing: 0.06em;
 }
 .hero-panel-value {
-  font-size: 2rem;
-  font-weight: 800;
-  color: var(--primary);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  color: var(--text);
 }
 .hero-panel-meta {
   margin-top: 0.3rem;
@@ -782,6 +804,7 @@ a { color: inherit; }
 }
 .dashboard-grid.secondary-grid {
   grid-template-columns: 1.15fr 0.85fr;
+  margin-top: 1.25rem;
 }
 .dashboard-card {
   background: var(--surface);
@@ -823,7 +846,7 @@ a { color: inherit; }
   padding: 0.34rem 0.6rem;
 }
 .dashboard-card-value {
-  font-size: 1.8rem;
+  font-size: var(--fs-lg);
   font-weight: 800;
   letter-spacing: -0.02em;
   margin-bottom: 0.2rem;
@@ -970,7 +993,7 @@ a { color: inherit; }
   padding: 0.65rem 1.3rem;
   border-radius: var(--radius-sm);
   font-weight: 650;
-  font-size: 0.88rem;
+  font-size: var(--fs-sm);
   font-family: inherit;
   cursor: pointer;
   border: none;
@@ -979,7 +1002,7 @@ a { color: inherit; }
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 42px;
+  height: var(--btn-h);
   white-space: nowrap;
 }
 .btn:active { transform: scale(0.97); }
@@ -1014,7 +1037,7 @@ a { color: inherit; }
 
 .btn-sm {
   padding: 0.4rem 0.85rem;
-  font-size: 0.78rem;
+  font-size: var(--fs-xs);
   border-radius: 7px;
   height: 32px;
 }
@@ -1273,7 +1296,7 @@ a { color: inherit; }
 }
 
 .stat-val {
-  font-size: 1.65rem;
+  font-size: var(--fs-lg);
   font-weight: 800;
   letter-spacing: -0.02em;
 }
