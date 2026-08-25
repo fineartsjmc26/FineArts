@@ -550,6 +550,8 @@ function initUIEvents() {
 }
 
 // Student Export Modal & Logic
+globalThis.startStudentExport = startStudentExport;
+
 function openStudentExportModal() {
   // permission check
   if (!currentUser || !['admin', 'incharge'].includes(currentUser.role)) {
@@ -595,8 +597,11 @@ async function startStudentExport(columns) {
   // gather filter selections for Year/Department from Student Master filters
   const yearSelect = document.getElementById('studentFilterYear');
   const deptSelect = document.getElementById('studentFilterDept');
+  const searchInput = document.getElementById('studentSearchInput');
   const selectedYears = yearSelect ? Array.from(yearSelect.selectedOptions).map(o => o.value).filter(Boolean) : [];
   const selectedDepts = deptSelect ? Array.from(deptSelect.selectedOptions).map(o => o.value).filter(Boolean) : [];
+  const searchQuery = searchInput ? searchInput.value.trim().toLowerCase() : '';
+  const exportAll = !(selectedYears.length || selectedDepts.length || searchQuery);
 
   // Prepare a function to fetch rows. Prefer Firestore-level querying when possible.
   let rows = [];
@@ -803,8 +808,11 @@ async function startStudentExport(columns) {
       const ws = XLSX.utils.json_to_sheet(subset, { header: selectedCols });
       // set header labels
       selectedCols.forEach((k, idx) => {
-        const cellAddress = XLSX.utils.encode_cell({ c: idx, r: 0 });
-        if (ws[cellAddress]) ws[cellAddress].v = headers[idx];
+        const cellAddress = typeof XLSX?.utils?.encode_cell === 'function'
+          ? XLSX.utils.encode_cell({ c: idx, r: 0 })
+          : `${String.fromCharCode(65 + idx)}1`;
+        if (!ws[cellAddress]) ws[cellAddress] = {};
+        ws[cellAddress].v = headers[idx];
       });
 
       // set reasonable column widths and types
@@ -821,7 +829,8 @@ async function startStudentExport(columns) {
       XLSX.utils.book_append_sheet(workbook, ws, 'Students');
 
       const fileSuffix = parts > 1 ? `_part${part + 1}` : '';
-      const filename = `${prefix || ''}Students_${selectedYears.length && !selectedYears.includes('ALL') ? selectedYears.join('-') : 'AllYears'}_${selectedDepts.length && !selectedDepts.includes('ALL') ? selectedDepts.join('-') : 'AllDepartments'}_${yyyy}${mm}${dd}_${HH}${MIN}${SS}${fileSuffix}.xlsx`;
+      const customPrefix = '';
+      const filename = `${customPrefix}Students_${selectedYears.length && !selectedYears.includes('ALL') ? selectedYears.join('-') : 'AllYears'}_${selectedDepts.length && !selectedDepts.includes('ALL') ? selectedDepts.join('-') : 'AllDepartments'}_${yyyy}${mm}${dd}_${HH}${MIN}${SS}${fileSuffix}.xlsx`;
 
       XLSX.writeFile(workbook, filename);
 

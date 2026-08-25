@@ -51,7 +51,15 @@ global.firebase = {
     };
   },
 };
-global.XLSX = { utils: { json_to_sheet() { return {}; }, book_new() { return {}; }, book_append_sheet() {} }, writeFile() {} };
+global.XLSX = {
+  utils: {
+    json_to_sheet() { return {}; },
+    book_new() { return {}; },
+    book_append_sheet() {},
+    encode_cell({ c, r }) { return `${String.fromCharCode(65 + c)}${r + 1}`; },
+  },
+  writeFile() {},
+};
 global.alert = () => {};
 
 global.fetch = async () => { throw new Error('unexpected fetch'); };
@@ -147,6 +155,10 @@ try {
     'Self-Finance|2nd Year|Physics|Zoe',
   ]);
 
+  global.XLSX.writeFile = function (...args) {
+    global.__lastWriteFileArgs = args;
+  };
+
   const classList = () => {
     const set = new Set();
     return {
@@ -217,6 +229,59 @@ try {
     users: [{ id: 'u2', username: 'incharge1', password: 'user123', role: 'incharge', name: 'Student Incharge 1', assignedTeamIds: ['Team Alpha'] }],
   };
   global.currentUser = global.appData.users[0];
+
+  const studentExportModal = {
+    classList: { add() {}, remove() {} },
+  };
+  const studentExportProgress = { style: {}, textContent: '' };
+  const progressBar = { value: 0 };
+  const progressText = { textContent: '' };
+  const studentFilterYear = { selectedOptions: [], options: [] };
+  const studentFilterDept = { selectedOptions: [], options: [] };
+  const studentSearchInput = { value: '' };
+
+  const originalGetElementById = global.document.getElementById;
+  global.document.getElementById = (id) => {
+    if (id === 'studentExportModal') return studentExportModal;
+    if (id === 'studentExportProgress') return studentExportProgress;
+    if (id === 'studentExportProgressBar') return progressBar;
+    if (id === 'studentExportProgressText') return progressText;
+    if (id === 'studentFilterYear') return studentFilterYear;
+    if (id === 'studentFilterDept') return studentFilterDept;
+    if (id === 'studentSearchInput') return studentSearchInput;
+    return originalGetElementById(id);
+  };
+
+  global.appData = {
+    attendance: [{
+      id: 'att_1',
+      teamId: 'Team Alpha',
+      date: '2024-01-10',
+      studentAttendanceMap: { s1: { h1: 'P', h2: 'P', h3: 'P', h4: 'P', h5: 'P' } },
+      locked: true,
+      markedBy: 'Admin',
+      unlockMode: 'admin',
+    }],
+    students: [
+      { id: 's1', name: 'Ada', rollNumber: '123', registerNumber: '456', mobile: '999', deptName: 'Computer Science', department: 'Aided', year: 'First Year', section: 'A', teamId: 'Team Alpha' },
+      { id: 's2', name: 'Ben', rollNumber: '124', registerNumber: '457', mobile: '888', deptName: 'Computer Science', department: 'Aided', year: 'Second Year', section: 'B', teamId: 'Team Alpha' },
+    ],
+    years: ['First Year', 'Second Year'],
+    departments: ['Computer Science'],
+    teams: ['Team Alpha'],
+  };
+
+  await assert.doesNotReject(async () => {
+    await global.startStudentExport([
+      { key: 'name', label: 'Name' },
+      { key: 'year', label: 'Year' },
+      { key: 'deptName', label: 'Department' },
+    ]);
+  });
+  assert.ok(global.__lastWriteFileArgs && global.__lastWriteFileArgs.length > 0);
+  global.document.getElementById = originalGetElementById;
+
+  console.log('student export regression test ok');
 
   global.document.getElementById = (id) => {
     if (id === 'markTeamSelect') return markTeamSelect;
