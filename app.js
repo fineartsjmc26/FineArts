@@ -940,11 +940,11 @@ function renderAttendanceMarkingForm() {
       <td data-label="Department">${s.deptName || 'Computer Science'}</td>
       <td data-label="Category"><span class="badge ${s.department === 'Aided' ? 'badge-aided' : 'badge-self'}">${s.department}</span></td>
       
-      <td data-label="H1" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h1 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="1" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h1}</button></td>
-      <td data-label="H2" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h2 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="2" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h2}</button></td>
-      <td data-label="H3" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h3 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="3" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h3}</button></td>
-      <td data-label="H4" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h4 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="4" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h4}</button></td>
-      <td data-label="H5" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h5 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="5" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h5}</button></td>
+      <td data-label="H1" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h1 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="1" aria-label="${h1 === 'P' ? 'Present' : 'Absent'} for hour 1" aria-pressed="${h1 === 'P'}" title="${h1 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h1}</button></td>
+      <td data-label="H2" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h2 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="2" aria-label="${h2 === 'P' ? 'Present' : 'Absent'} for hour 2" aria-pressed="${h2 === 'P'}" title="${h2 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h2}</button></td>
+      <td data-label="H3" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h3 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="3" aria-label="${h3 === 'P' ? 'Present' : 'Absent'} for hour 3" aria-pressed="${h3 === 'P'}" title="${h3 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h3}</button></td>
+      <td data-label="H4" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h4 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="4" aria-label="${h4 === 'P' ? 'Present' : 'Absent'} for hour 4" aria-pressed="${h4 === 'P'}" title="${h4 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h4}</button></td>
+      <td data-label="H5" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h5 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="5" aria-label="${h5 === 'P' ? 'Present' : 'Absent'} for hour 5" aria-pressed="${h5 === 'P'}" title="${h5 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h5}</button></td>
     `;
     tbody.appendChild(tr);
   });
@@ -956,10 +956,16 @@ function togglePABtn(btn) {
     btn.textContent = 'A';
     btn.classList.remove('present');
     btn.classList.add('absent');
+    btn.setAttribute('aria-label', `Absent for hour ${btn.dataset.hour}`);
+    btn.setAttribute('aria-pressed', 'false');
+    btn.title = 'Absent';
   } else {
     btn.textContent = 'P';
     btn.classList.remove('absent');
     btn.classList.add('present');
+    btn.setAttribute('aria-label', `Present for hour ${btn.dataset.hour}`);
+    btn.setAttribute('aria-pressed', 'true');
+    btn.title = 'Present';
   }
 }
 
@@ -971,8 +977,14 @@ function setAll5Hours(val) {
       btn.textContent = val;
       if (val === 'P') {
         btn.classList.remove('absent'); btn.classList.add('present');
+        btn.setAttribute('aria-label', `Present for hour ${btn.dataset.hour}`);
+        btn.setAttribute('aria-pressed', 'true');
+        btn.title = 'Present';
       } else {
         btn.classList.remove('present'); btn.classList.add('absent');
+        btn.setAttribute('aria-label', `Absent for hour ${btn.dataset.hour}`);
+        btn.setAttribute('aria-pressed', 'false');
+        btn.title = 'Absent';
       }
     }
   });

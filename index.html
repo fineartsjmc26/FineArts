@@ -69,6 +69,7 @@
             <span class="nav-icon"><svg data-lucide="graduation-cap"></svg></span>
             <span class="nav-label">Student Master</span>
           </button>
+          <div class="sidebar-group-label" style="padding:0.6rem 0.75rem; font-size:0.75rem; font-weight:800; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.06em;">Management</div>
           <button class="tab-btn admin-only" data-tab="deptsTab" type="button" aria-label="Manage departments">
             <span class="nav-icon"><svg data-lucide="building-2"></svg></span>
             <span class="nav-label">Departments</span>
@@ -93,14 +94,7 @@
             <span class="nav-icon"><svg data-lucide="file-bar-chart"></svg></span>
             <span class="nav-label">Reports</span>
           </button>
-          <button class="tab-btn" data-tab="settingsTab" type="button" aria-label="Open settings">
-            <span class="nav-icon"><svg data-lucide="settings"></svg></span>
-            <span class="nav-label">Settings</span>
-          </button>
-          <button class="tab-btn logout-nav-btn" data-action="logout" type="button" aria-label="Log out">
-            <span class="nav-icon"><svg data-lucide="log-out"></svg></span>
-            <span class="nav-label">Logout</span>
-          </button>
+          <!-- settings/logout moved to bottom for better grouping (see sidebar-bottom) -->
         </div>
       </nav>
 
@@ -111,6 +105,16 @@
             <div class="sidebar-user-name" id="sidebarUserName">Admin</div>
             <div class="sidebar-user-role" id="sidebarUserRole">Administrator</div>
           </div>
+        </div>
+        <div style="margin-top:0.8rem; display:flex; gap:0.5rem; align-items:center;">
+          <button class="btn btn-secondary btn-sm" id="sidebarSettingsBtn" type="button" aria-label="Settings">
+            <svg data-lucide="settings" width="14" height="14"></svg>
+            <span style="margin-left:6px;">Settings</span>
+          </button>
+          <button class="btn btn-secondary btn-sm" id="sidebarLogoutBtn" type="button" aria-label="Log out">
+            <svg data-lucide="log-out" width="14" height="14"></svg>
+            <span style="margin-left:6px;">Logout</span>
+          </button>
         </div>
       </div>
     </aside>
@@ -206,7 +210,6 @@
 
       <!-- Main Application Container -->
       <main class="container hidden" id="mainContainer">
-        <h1 class="sr-only">Attendance Management System</h1>
 
     <!-- Premium dashboard shell for the main overview experience -->
     <section id="dashboardTab" class="tab-content">
@@ -287,7 +290,7 @@
           <div class="section-heading">
             <div>
               <p class="section-kicker">Recent activity</p>
-              <h3>Latest operations</h3>
+              <h3>Activity &amp; Status</h3>
             </div>
             <span class="soft-pill">Live feed</span>
           </div>
@@ -304,14 +307,17 @@
             <button class="quick-link" type="button" data-tab-quick="markTab">
               <span class="quick-link-icon"><svg data-lucide="clipboard-check"></svg></span>
               <span>Mark attendance for a team</span>
+              <span class="quick-link-chevron" aria-hidden="true">›</span>
             </button>
             <button class="quick-link" type="button" data-tab-quick="studentsTab">
               <span class="quick-link-icon"><svg data-lucide="graduation-cap"></svg></span>
               <span>Manage student records</span>
+              <span class="quick-link-chevron" aria-hidden="true">›</span>
             </button>
             <button class="quick-link" type="button" data-tab-quick="recordsTab">
               <span class="quick-link-icon"><svg data-lucide="file-bar-chart"></svg></span>
               <span>Open reporting history</span>
+              <span class="quick-link-chevron" aria-hidden="true">›</span>
             </button>
           </div>
         </article>
@@ -320,6 +326,7 @@
 
     <!-- TAB 1: MARK ATTENDANCE (5-HOUR SINGLE ROW CLICK BOXES BY TEAM & DATE) -->
     <section id="markTab" class="tab-content hidden">
+      <h1 class="page-title">Mark Attendance</h1>
       <div class="card section-shell">
         <div class="section-heading">
           <div>
@@ -332,30 +339,30 @@
 
         <div class="filter-grid">
           <div class="form-group">
-            <label>Select Team</label>
-            <select id="markTeamSelect" class="input-control"></select>
+            <label for="markTeamSelect">Select Team</label>
+            <select id="markTeamSelect" class="input-control" aria-label="Select Team"></select>
           </div>
           <div class="form-group">
-            <label>Select Date</label>
-            <input type="date" id="markDate" class="input-control" />
+            <label for="markDate">Select Date</label>
+            <input type="date" id="markDate" class="input-control" aria-label="Select Date" />
           </div>
           <div class="form-group">
-            <label>Categorize By</label>
-            <select id="markCategoryFilter" class="input-control">
+            <label for="markCategoryFilter">Categorize By</label>
+            <select id="markCategoryFilter" class="input-control" aria-label="Categorize By">
               <option value="ALL">All Categories</option>
               <option value="Aided">Aided</option>
               <option value="Self-Finance">Self-Finance</option>
             </select>
           </div>
           <div class="form-group">
-            <label>Department</label>
-            <select id="markDeptNameFilter" class="input-control">
+            <label for="markDeptNameFilter">Department</label>
+            <select id="markDeptNameFilter" class="input-control" aria-label="Department">
               <option value="ALL">All Departments</option>
             </select>
           </div>
           <div class="form-group">
-            <label>Year</label>
-            <select id="markYearFilter" class="input-control">
+            <label for="markYearFilter">Year</label>
+            <select id="markYearFilter" class="input-control" aria-label="Year">
               <option value="ALL">All Years</option>
             </select>
           </div>
