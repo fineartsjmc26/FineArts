@@ -420,6 +420,32 @@
       </div>
     </section>
 
+    <!-- EXPORT: STUDENT MASTER EXPORT MODAL -->
+    <!-- EXPORT: STUDENT MASTER EXPORT CONFIRMATION MODAL (SIMPLIFIED) -->
+    <div class="modal-backdrop hidden" id="studentExportModal">
+      <div class="modal-content" style="max-width:520px;">
+        <div class="modal-header">
+          <h3 class="modal-title">Export Student Details</h3>
+          <button class="close-btn" id="closeStudentExportModal">&times;</button>
+        </div>
+
+        <div style="padding: 0.75rem 1rem 1rem 1rem;">
+          <p style="color:var(--text-muted);">This export will include the student fields from the Add/Edit form only: ID, Name, Roll Number, Register Number, Mobile, Department Name, Department Category, Year, Section and Team(s).</p>
+
+          <div style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.75rem;">
+            <button class="btn btn-primary" id="startStudentExportBtn">Export</button>
+            <button class="btn btn-secondary" id="cancelStudentExportBtn">Cancel</button>
+          </div>
+
+          <div id="studentExportProgress" style="margin-top:0.75rem; display:none;">
+            <div style="font-size:0.85rem; color:var(--text-muted);">Export Progress</div>
+            <progress id="studentExportProgressBar" value="0" max="100" style="width:100%;"></progress>
+            <div id="studentExportProgressText" style="font-size:0.85rem; margin-top:0.25rem; color:var(--text-muted);">Preparing...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- TAB 2: ATTENDANCE RECORDS (ATTENDANCE DATA VIEWING AREA WITH CALENDAR & CATEGORIZATION) -->
     <section id="recordsTab" class="tab-content hidden">
       <div class="card">
@@ -549,15 +575,33 @@
             <h2>Student Directory</h2>
             <p style="color: var(--text-muted); font-size: 0.85rem;">Add, edit and delete student details</p>
           </div>
-          <button class="btn btn-primary admin-only" id="openAddStudentModalBtn">
-            ➕ Add New Student
-          </button>
+          <div style="display:flex; gap:0.5rem; align-items:center;">
+            <button class="btn btn-primary admin-only" id="openAddStudentModalBtn">➕ Add New Student</button>
+            <button class="btn btn-success" id="exportStudentsBtn">📥 Export to Excel</button>
+          </div>
         </div>
 
         <div class="search-shell" style="max-width: 440px; margin-bottom: 1.25rem;">
           <svg data-lucide="search" width="16" height="16"></svg>
           <input type="text" id="studentSearchInput" class="input-control" placeholder="Search student by name, roll no, or register no" aria-label="Search students" />
           <button class="search-clear" id="clearStudentSearchBtn" type="button" aria-label="Clear search">×</button>
+        </div>
+
+        <div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:1rem;">
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <label style="font-size:0.8rem; color:var(--text-muted);">Year</label>
+            <select id="studentFilterYear" class="input-control" multiple size="3" aria-label="Filter by Year"></select>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <label style="font-size:0.8rem; color:var(--text-muted);">Department</label>
+            <select id="studentFilterDept" class="input-control" multiple size="3" aria-label="Filter by Department"></select>
+          </div>
+
+          <div style="display:flex; gap:0.5rem; align-items:flex-end;">
+            <button class="btn btn-primary btn-sm" id="applyStudentFiltersBtn" type="button">Apply Filters</button>
+            <button class="btn btn-secondary btn-sm" id="clearStudentFiltersBtn" type="button">Clear</button>
+          </div>
         </div>
 
         <div class="table-responsive responsive-cards">
