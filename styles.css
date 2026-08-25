@@ -4,8 +4,8 @@
    ========================================================================== */
 
 :root {
-  --primary: #2864d7;
-  --primary-dark: #1d4da9;
+  --primary: #234ea3;
+  --primary-dark: #173f81;
   --primary-light: #edf4ff;
   --secondary: #16304a;
   --bg: #f4f7fb;
@@ -16,7 +16,7 @@
   --warning-light: #fff4df;
   --danger: #922323;
   --danger-light: #fdeeee;
-  --purple: #7356d9;
+  --purple: #4d3bb8;
   --border: #d9e2ec;
   --text: #16304a;
   --text-muted: #425971;
@@ -303,16 +303,26 @@ a { color: inherit; }
 .nav-label,
 .header-date,
 .breadcrumb,
+.section-kicker,
 .section-heading p,
 .form-group label,
 .data-table th,
 .soft-pill,
-.dashboard-pill {
+.dashboard-pill,
+.dashboard-card-label,
+.hero-panel-meta,
+.recent-activity li {
   color: var(--text-muted);
 }
 
-.sidebar-user-role {
-  color: var(--text-muted);
+.sidebar-user-role,
+.crumb-current,
+.hero-copy h2,
+.hero-copy p,
+.hero-panel-value,
+.hero-panel-title,
+.dashboard-card-value {
+  color: var(--text);
 }
 
 .sidebar-collapse-btn {
