@@ -1,0 +1,133 @@
+/* ==========================================================================
+   Attendance Studio — Design System Dark Theme
+   Replaced the previous dark theme with the design-system token set so the
+   application uses consistent tokens from the shared design system.
+   This file defines the dark-mode tokens and a small set of base mappings
+   (body, cards, buttons, inputs, tables) that consume those tokens.
+   ========================================================================== */
+
+/* Primary selector: supports both attribute and legacy `.dark` class */
+:root[data-theme="dark"],
+.dark {
+  /* ---- Surface layers ---- */
+  --bg-base: #12141a;
+  --bg-surface: #191c24;
+  --bg-surface-alt: #1f232d;
+  --bg-surface-hover: #262b37;
+  --bg-surface-raised: #1e222b;
+  --bg-sidebar: #0f1116;
+  --bg-overlay: rgba(5, 6, 9, 0.65);
+
+  /* ---- Borders / dividers ---- */
+  --border-subtle: #2b2f3b;
+  --border-strong: #3a3f4d;
+
+  /* ---- Text ---- */
+  --text-primary: #e2e8f0;
+  --text-secondary: #a6aebf;
+  --text-muted: #6b7280;
+  --text-on-accent: #0f1116;
+
+  /* ---- Accent / brand ---- */
+  --accent: #7b9cf2;
+  --accent-hover: #9ab4f5;
+  --accent-active: #b8ccf8;
+  --accent-soft: rgba(123, 156, 242, 0.14);
+  --accent-border: rgba(123, 156, 242, 0.35);
+
+  /* ---- Warm / ink mark ---- */
+  --warm: #e3a94d;
+  --warm-soft: rgba(227, 169, 77, 0.14);
+  --warm-border: rgba(227, 169, 77, 0.35);
+
+  /* ---- Status ---- */
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.14);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.14);
+  --warning: #e3a94d;
+  --warning-soft: rgba(227, 169, 77, 0.14);
+
+  /* ---- Shadows / focus ---- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.6);
+
+  --focus-ring: 0 0 0 2px var(--bg-base), 0 0 0 4px var(--accent);
+  color-scheme: dark;
+}
+
+/* ---- Base mappings ---- */
+:root[data-theme="dark"] body,
+.dark body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Cards / panels */
+.card,
+.panel,
+.stat-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-sm);
+  color: var(--text-primary);
+}
+.card:hover,
+.stat-card:hover { background: var(--bg-surface-hover); border-color: var(--border-strong); }
+
+/* Buttons */
+.btn-primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border: none;
+}
+.btn-primary:hover { background: var(--accent-hover); }
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+}
+.btn-secondary:hover { background: var(--bg-surface-hover); border-color: var(--accent); }
+
+/* Forms */
+input, select, textarea {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+}
+input::placeholder, textarea::placeholder { color: var(--text-muted); }
+input:focus, select:focus, textarea:focus { outline: none; box-shadow: var(--focus-ring); border-color: var(--accent); }
+
+/* Tables */
+table { background: var(--bg-surface); color: var(--text-primary); border-collapse: collapse; }
+thead th { background: var(--bg-sidebar); color: var(--text-secondary); border-bottom: 1px solid var(--border-strong); }
+tbody td { border-bottom: 1px solid var(--border-subtle); }
+tbody tr:hover td { background: var(--bg-surface-hover); }
+
+/* Chips / status */
+.chip { background: var(--bg-surface-alt); color: var(--text-secondary); border: 1px solid var(--border-strong); }
+.chip.present { background: var(--success-soft); color: var(--success); border-color: transparent; }
+.chip.absent { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+
+/* Links */
+a { color: var(--accent); }
+a:hover { color: var(--accent-hover); }
+
+/* Small utilities for scrollbars in dark mode */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg-base); }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* Accessibility: ensure focus uses the design system ring */
+:focus-visible { box-shadow: var(--focus-ring); border-radius: 6px; }
+
+/* Theme cross-fade helper (used by theme-toggle.js when toggling) */
+.theme-transitioning,
+.theme-transitioning * { transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease, box-shadow 300ms ease; }
+
+/* End of design-system-driven dark theme */

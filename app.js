@@ -412,6 +412,29 @@ function logoutCurrentUser() {
   document.querySelectorAll('.profile-menu.show').forEach(el => el.classList.remove('show'));
 }
 
+function logoutUserSessionIfActive(userId) {
+  const storedUserRaw = sessionStorage.getItem('attendance_session_user');
+  let storedUser = null;
+
+  try {
+    storedUser = storedUserRaw ? JSON.parse(storedUserRaw) : null;
+  } catch (error) {
+    sessionStorage.removeItem('attendance_session_user');
+    storedUser = null;
+  }
+
+  if (storedUser && storedUser.id === userId) {
+    sessionStorage.removeItem('attendance_session_user');
+  }
+
+  if (currentUser && currentUser.id === userId) {
+    logoutCurrentUser();
+    return true;
+  }
+
+  return Boolean(storedUser && storedUser.id === userId);
+}
+
 function showDashboard() {
   document.getElementById('authWrapper').classList.add('hidden');
   document.getElementById('appHeader').classList.remove('hidden');
@@ -1132,6 +1155,11 @@ function getYearSortValue(yearValue) {
 }
 
 function compareStudentOrder(left, right, options = {}) {
+  const directionFor = (fieldName, defaultDirection = 'asc') => {
+    const chosen = options[`${fieldName}Direction`] ?? defaultDirection;
+    return chosen === 'desc' ? -1 : 1;
+  };
+
   const normalizeDepartment = (value) => {
     const department = String(value || '').trim();
     if (/^\s*AID/i.test(department)) return 0;
@@ -1142,22 +1170,22 @@ function compareStudentOrder(left, right, options = {}) {
   // Finance category rank: ensure Aided students appear before Self-Finance, then others
   const leftCategoryRank = normalizeDepartment(left.department || left['Department Category'] || left.departmentCategory);
   const rightCategoryRank = normalizeDepartment(right.department || right['Department Category'] || right.departmentCategory);
-  if (leftCategoryRank !== rightCategoryRank) return leftCategoryRank - rightCategoryRank;
+  if (leftCategoryRank !== rightCategoryRank) return (leftCategoryRank - rightCategoryRank) * directionFor('department', 'asc');
 
   // Secondary: Year order (First -> Second -> Third -> Fourth). Use existing helper.
   const leftYearRank = getYearSortValue(left.year || left['Year']);
   const rightYearRank = getYearSortValue(right.year || right['Year']);
-  if (leftYearRank !== rightYearRank) return leftYearRank - rightYearRank;
+  if (leftYearRank !== rightYearRank) return (leftYearRank - rightYearRank) * directionFor('year', 'asc');
 
   // Next: Department name A -> Z
   const leftDeptName = String(left.deptName || left['Department Name'] || '').trim().toUpperCase();
   const rightDeptName = String(right.deptName || right['Department Name'] || '').trim().toUpperCase();
-  if (leftDeptName !== rightDeptName) return leftDeptName.localeCompare(rightDeptName);
+  if (leftDeptName !== rightDeptName) return leftDeptName.localeCompare(rightDeptName) * directionFor('deptName', 'asc');
 
   // Next: Student name A -> Z
   const leftName = String(left.name || left.studentName || left['Student Name'] || '').trim().toUpperCase();
   const rightName = String(right.name || right.studentName || right['Student Name'] || '').trim().toUpperCase();
-  if (leftName !== rightName) return leftName.localeCompare(rightName);
+  if (leftName !== rightName) return leftName.localeCompare(rightName) * directionFor('name', 'asc');
 
   // Finally: Roll number numeric ascending, then register number numeric ascending
   const numericValueFromString = (value) => {
@@ -1170,26 +1198,26 @@ function compareStudentOrder(left, right, options = {}) {
   const leftRollNum = numericValueFromString(left.rollNumber || left['Roll Number'] || left.roll);
   const rightRollNum = numericValueFromString(right.rollNumber || right['Roll Number'] || right.roll);
   if (!Number.isNaN(leftRollNum) || !Number.isNaN(rightRollNum)) {
-    if (Number.isNaN(leftRollNum)) return -1;
-    if (Number.isNaN(rightRollNum)) return 1;
-    if (leftRollNum !== rightRollNum) return leftRollNum - rightRollNum;
+    if (Number.isNaN(leftRollNum)) return -1 * directionFor('rollNumber', 'asc');
+    if (Number.isNaN(rightRollNum)) return 1 * directionFor('rollNumber', 'asc');
+    if (leftRollNum !== rightRollNum) return (leftRollNum - rightRollNum) * directionFor('rollNumber', 'asc');
   } else {
     const lRoll = String(left.rollNumber || left['Roll Number'] || '').trim();
     const rRoll = String(right.rollNumber || right['Roll Number'] || '').trim();
-    if (lRoll !== rRoll) return lRoll.localeCompare(rRoll, undefined, { numeric: true, sensitivity: 'base' });
+    if (lRoll !== rRoll) return lRoll.localeCompare(rRoll, undefined, { numeric: true, sensitivity: 'base' }) * directionFor('rollNumber', 'asc');
   }
 
   const leftRegNum = numericValueFromString(left.registerNumber || left['Register Number'] || left.registerNumber);
   const rightRegNum = numericValueFromString(right.registerNumber || right['Register Number'] || right.registerNumber);
   if (!Number.isNaN(leftRegNum) || !Number.isNaN(rightRegNum)) {
-    if (Number.isNaN(leftRegNum)) return -1;
-    if (Number.isNaN(rightRegNum)) return 1;
-    return leftRegNum - rightRegNum;
+    if (Number.isNaN(leftRegNum)) return -1 * directionFor('registerNumber', 'asc');
+    if (Number.isNaN(rightRegNum)) return 1 * directionFor('registerNumber', 'asc');
+    if (leftRegNum !== rightRegNum) return (leftRegNum - rightRegNum) * directionFor('registerNumber', 'asc');
   }
 
   const lReg = String(left.registerNumber || left['Register Number'] || '').trim();
   const rReg = String(right.registerNumber || right['Register Number'] || '').trim();
-  return lReg.localeCompare(rReg, undefined, { numeric: true, sensitivity: 'base' });
+  return lReg.localeCompare(rReg, undefined, { numeric: true, sensitivity: 'base' }) * directionFor('registerNumber', 'asc');
 }
 
 function sortStudents(left, right) {
@@ -1409,10 +1437,11 @@ async function handleSaveAttendance() {
 
   // When saved by an incharge or admin, lock the team's entered attendance immediately
   const teamIsComplete = isTeamAttendanceComplete(teamId, { studentAttendanceMap });
+  const markingInchargeName = currentUser?.name || currentUser?.username || 'System';
   const newRecord = {
     id: index >= 0 ? appData.attendance[index].id : 'att_' + Date.now(),
     teamId, date, studentAttendanceMap,
-    markedBy: currentUser.name || currentUser.username,
+    markedBy: markingInchargeName,
     // lock the record on save to prevent further changes unless unlocked by Admin
     locked: true,
     teamLocked: true,
@@ -1428,7 +1457,7 @@ async function handleSaveAttendance() {
       type: 'team-attendance-complete',
       teamId,
       date,
-      message: `Attendance for ${teamId} on ${date} was completely marked by ${newRecord.markedBy}.`,
+      message: `Attendance entered for ${teamId} by ${markingInchargeName} on ${date}. Team attendance is now complete.`,
       read: false,
       timestamp: new Date().toISOString()
     });
@@ -1444,7 +1473,7 @@ async function handleSaveAttendance() {
       teamId,
       date,
       senderId: currentUser.id,
-      message: `Student Incharge ${currentUser.name || currentUser.username} marked attendance for ${teamId} on ${date}.`,
+      message: `Student Incharge ${markingInchargeName} entered attendance for team ${teamId} on ${date}.`,
       read: false,
       timestamp: new Date().toISOString()
     });
@@ -1455,7 +1484,7 @@ async function handleSaveAttendance() {
       teamId,
       date,
       senderId: currentUser.id,
-      message: `You marked attendance for ${teamId} on ${date}. Marked students are now locked across teams.`,
+      message: `${markingInchargeName} saved attendance for team ${teamId} on ${date}.`,
       read: false,
       timestamp: new Date().toISOString()
     });
@@ -1465,6 +1494,8 @@ async function handleSaveAttendance() {
   else appData.attendance.push(newRecord);
 
   await saveAppData();
+  const toastMessage = `${teamId} attendance entered by ${markingInchargeName}.`;
+  showPushNotification(toastMessage, 'success', 4200);
   alert(teamIsComplete
     ? `5-Hour attendance saved and the entire team is locked for ${teamId} (${date})!`
     : `5-Hour attendance saved. Marked students are locked; the team remains open for the remaining students.`);
@@ -1544,6 +1575,22 @@ async function clearNotificationsForCurrentUser() {
   renderNotifications();
 }
 globalThis.clearNotificationsForCurrentUser = clearNotificationsForCurrentUser;
+
+function showPushNotification(message, type = 'info', durationMs = 4200) {
+  const notification = document.getElementById('pushDownNotification');
+  if (!notification) return;
+
+  notification.textContent = message;
+  notification.classList.remove('show', 'success', 'info');
+  notification.classList.add(type, 'show');
+  notification.classList.remove('hidden');
+
+  clearTimeout(showPushNotification._timerId);
+  showPushNotification._timerId = setTimeout(() => {
+    notification.classList.remove('show');
+    notification.classList.add('hidden');
+  }, durationMs);
+}
 
 function renderNotifications() {
   const notificationDot = document.querySelector('#notifBtn .notif-dot');
@@ -2335,9 +2382,12 @@ async function removeUser(userId) {
     await saveAppData();
     renderAllViews();
 
-    if (currentUser.id === userId) {
-      alert('You have deleted your own account. You will now be logged out.');
-      logoutCurrentUser();
+    const wasActiveSession = logoutUserSessionIfActive(userId);
+
+    if (currentUser && currentUser.id === userId) {
+      alert('You have deleted your own account. You have been logged out immediately.');
+    } else if (wasActiveSession) {
+      alert(`User account "${targetUser.username}" was deleted and that session was logged out immediately.`);
     } else {
       alert(`User account "${targetUser.username}" removed.`);
     }
