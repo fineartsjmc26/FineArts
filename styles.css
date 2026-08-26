@@ -349,6 +349,29 @@ button[data-tab="settingsTab"] .nav-label,
 .app-shell.sidebar-collapsed .sidebar-collapse-btn svg { transform: rotate(180deg); }
 .app-shell.sidebar-collapsed .tab-btn { justify-content: center; }
 
+/* hide user action buttons (Settings / Logout) when sidebar is collapsed */
+.app-shell.sidebar-collapsed .sidebar-user-actions {
+  display: none !important;
+}
+
+/* Header control labels: hide by default, show when sidebar expanded or on wide screens */
+.header-user-controls .header-control-label {
+  display: none;
+  margin-left: 6px;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+/* show labels when the sidebar is expanded */
+.app-shell:not(.sidebar-collapsed) .header-user-controls .header-control-label {
+  display: inline-block;
+}
+
+/* also show on wide viewports regardless of sidebar state */
+@media (min-width: 1100px) {
+  .header-user-controls .header-control-label { display: inline-block; }
+}
+
 .sidebar-nav {
   flex: 1;
   overflow-y: auto;

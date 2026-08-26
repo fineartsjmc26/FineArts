@@ -392,9 +392,13 @@ function initAuth() {
     }
   });
 
-  document.getElementById('logoutBtn').addEventListener('click', () => {
-    logoutCurrentUser();
-  });
+  const logoutBtnEl = document.getElementById('logoutBtn');
+  if (logoutBtnEl) {
+    logoutBtnEl.addEventListener('click', () => {
+      logoutCurrentUser();
+    });
+  }
+  // headerLogoutBtn removed from UI; no listener attached
 }
 
 function logoutCurrentUser() {
@@ -575,6 +579,28 @@ function initUIEvents() {
       window.dispatchEvent(new CustomEvent('attendance-export-requested'));
     }
   });
+  const sidebarSettingsBtn = document.getElementById('sidebarSettingsBtn');
+  if (sidebarSettingsBtn) sidebarSettingsBtn.addEventListener('click', () => {
+    switchToTab('settingsTab');
+    renderVisibleTab();
+  });
+
+  const sidebarLogoutBtn = document.getElementById('sidebarLogoutBtn');
+  if (sidebarLogoutBtn) sidebarLogoutBtn.addEventListener('click', () => {
+    logoutCurrentUser();
+  });
+  const profileSettingsBtn = document.getElementById('profileSettingsBtn');
+  if (profileSettingsBtn) profileSettingsBtn.addEventListener('click', () => {
+    switchToTab('settingsTab');
+    renderVisibleTab();
+    document.querySelectorAll('.profile-menu.show').forEach(el => el.classList.remove('show'));
+  });
+
+  const profileLogoutBtn = document.getElementById('profileLogoutBtn');
+  if (profileLogoutBtn) profileLogoutBtn.addEventListener('click', () => {
+    logoutCurrentUser();
+  });
+  // header Settings/Logout controls removed; actions remain available under the sidebar profile
   document.getElementById('closeStudentModal').addEventListener('click', () => closeModal('studentModal'));
   document.getElementById('cancelStudentBtn').addEventListener('click', () => closeModal('studentModal'));
   document.getElementById('studentForm').addEventListener('submit', handleSaveStudent);
@@ -690,7 +716,8 @@ globalThis.startStudentExport = async function startStudentExport(columns = [], 
     const checked = Array.from(document.querySelectorAll('#exportColumnsList input[type="checkbox"]'));
     selectedCols = checked.filter(cb => cb.checked).map(cb => cb.dataset.key || cb.getAttribute('data-key'));
   } else {
-    selectedCols = ['name', 'deptName', 'section', 'rollNumber', 'registerNumber', 'mobile', 'team'];
+    // default export order required by user
+    selectedCols = ['name', 'rollNumber', 'registerNumber', 'mobile', 'deptName', 'year', 'department', 'section'];
   }
 
   if (!selectedCols.length) {
@@ -737,9 +764,9 @@ globalThis.startStudentExport = async function startStudentExport(columns = [], 
 
   const headerMap = {
     name: 'Student Name',
-    deptName: 'Department',
+    deptName: 'Department Name',
     year: 'Year',
-    department: 'Aided / Self Finance',
+    department: 'Department Category',
     section: 'Section',
     rollNumber: 'Roll Number',
     registerNumber: 'Register Number',
@@ -747,17 +774,24 @@ globalThis.startStudentExport = async function startStudentExport(columns = [], 
     team: 'Team',
   };
 
-  const formattedRows = exportRows.map(row => {
-    const out = {};
+  // Build formatted rows with headers in the requested order
+  const formattedRows = exportRows.map(studentRow => {
+    const obj = {};
     selectedCols.forEach(key => {
       const label = headerMap[key] || key;
-      if (row[key] !== undefined) out[label] = row[key];
+      obj[label] = studentRow[key] != null ? studentRow[key] : '';
     });
-    return out;
+    return obj;
   });
 
+  // Apply required sorting: Student Name A->Z, Roll Number numeric asc, Register Number numeric asc
+  const sortedFormattedRows = sortExportRowsForExcel(formattedRows);
+
+  // use sorted rows for export
+  const rowsToWrite = sortedFormattedRows;
+
   const workbook = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(formattedRows);
+  const ws = XLSX.utils.json_to_sheet(rowsToWrite);
 
   if (formattedRows.length) {
     const columns = Object.keys(formattedRows[0]);
@@ -781,8 +815,16 @@ globalThis.startStudentExport = async function startStudentExport(columns = [], 
 };
 
 // Keep the new premium shell and legacy sections in sync without changing app behavior.
-function switchToTab(tabId) {
+// Simple tab history stack to support a Back button
+globalThis._tabHistory = globalThis._tabHistory || [];
+
+function switchToTab(tabId, recordHistory = true) {
   if (!tabId) return;
+  if (recordHistory && currentTabId && currentTabId !== tabId) {
+    globalThis._tabHistory.push(currentTabId);
+    // limit history length
+    if (globalThis._tabHistory.length > 50) globalThis._tabHistory.shift();
+  }
   currentTabId = tabId;
 
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -798,6 +840,15 @@ function switchToTab(tabId) {
   if (labelEl) {
     const activeLabel = targetBtn ? targetBtn.querySelector('.nav-label')?.textContent || 'Dashboard' : 'Dashboard';
     labelEl.textContent = activeLabel;
+  }
+}
+
+function goBackTab() {
+  const prev = (globalThis._tabHistory && globalThis._tabHistory.length) ? globalThis._tabHistory.pop() : null;
+  if (prev) {
+    switchToTab(prev, false);
+  } else {
+    switchToTab('dashboardTab', false);
   }
 }
 
@@ -1083,37 +1134,62 @@ function getYearSortValue(yearValue) {
 function compareStudentOrder(left, right, options = {}) {
   const normalizeDepartment = (value) => {
     const department = String(value || '').trim();
-    if (department === 'Aided') return 0;
-    if (department === 'Self-Finance') return 1;
+    if (/^\s*AID/i.test(department)) return 0;
+    if (/SELF[- ]?FINANCE/i.test(department)) return 1;
     return 2;
   };
 
-  const rollDirection = options.rollNumberDirection === 'desc' ? -1 : 1;
-  const registerDirection = options.registerNumberDirection === 'desc' ? -1 : 1;
-
-  const leftCategoryRank = normalizeDepartment(left.department);
-  const rightCategoryRank = normalizeDepartment(right.department);
+  // Finance category rank: ensure Aided students appear before Self-Finance, then others
+  const leftCategoryRank = normalizeDepartment(left.department || left['Department Category'] || left.departmentCategory);
+  const rightCategoryRank = normalizeDepartment(right.department || right['Department Category'] || right.departmentCategory);
   if (leftCategoryRank !== rightCategoryRank) return leftCategoryRank - rightCategoryRank;
 
-  const leftYear = getYearSortValue(left.year);
-  const rightYear = getYearSortValue(right.year);
-  if (leftYear !== rightYear) return leftYear - rightYear;
+  // Secondary: Year order (First -> Second -> Third -> Fourth). Use existing helper.
+  const leftYearRank = getYearSortValue(left.year || left['Year']);
+  const rightYearRank = getYearSortValue(right.year || right['Year']);
+  if (leftYearRank !== rightYearRank) return leftYearRank - rightYearRank;
 
-  const leftDeptName = String(left.deptName || '').trim().toUpperCase();
-  const rightDeptName = String(right.deptName || '').trim().toUpperCase();
+  // Next: Department name A -> Z
+  const leftDeptName = String(left.deptName || left['Department Name'] || '').trim().toUpperCase();
+  const rightDeptName = String(right.deptName || right['Department Name'] || '').trim().toUpperCase();
   if (leftDeptName !== rightDeptName) return leftDeptName.localeCompare(rightDeptName);
 
-  const leftName = String(left.name || left.studentName || '').trim().toUpperCase();
-  const rightName = String(right.name || right.studentName || '').trim().toUpperCase();
+  // Next: Student name A -> Z
+  const leftName = String(left.name || left.studentName || left['Student Name'] || '').trim().toUpperCase();
+  const rightName = String(right.name || right.studentName || right['Student Name'] || '').trim().toUpperCase();
   if (leftName !== rightName) return leftName.localeCompare(rightName);
 
-  const leftRoll = String(left.rollNumber || '').trim();
-  const rightRoll = String(right.rollNumber || '').trim();
-  if (leftRoll !== rightRoll) return leftRoll.localeCompare(rightRoll, undefined, { numeric: true, sensitivity: 'base' }) * rollDirection;
+  // Finally: Roll number numeric ascending, then register number numeric ascending
+  const numericValueFromString = (value) => {
+    if (value == null) return Number.NaN;
+    const digits = String(value).match(/\d+/g);
+    if (!digits || !digits.length) return Number.NaN;
+    return Number.parseInt(digits.join(''), 10);
+  };
 
-  const leftRegister = String(left.registerNumber || '').trim();
-  const rightRegister = String(right.registerNumber || '').trim();
-  return leftRegister.localeCompare(rightRegister, undefined, { numeric: true, sensitivity: 'base' }) * registerDirection;
+  const leftRollNum = numericValueFromString(left.rollNumber || left['Roll Number'] || left.roll);
+  const rightRollNum = numericValueFromString(right.rollNumber || right['Roll Number'] || right.roll);
+  if (!Number.isNaN(leftRollNum) || !Number.isNaN(rightRollNum)) {
+    if (Number.isNaN(leftRollNum)) return -1;
+    if (Number.isNaN(rightRollNum)) return 1;
+    if (leftRollNum !== rightRollNum) return leftRollNum - rightRollNum;
+  } else {
+    const lRoll = String(left.rollNumber || left['Roll Number'] || '').trim();
+    const rRoll = String(right.rollNumber || right['Roll Number'] || '').trim();
+    if (lRoll !== rRoll) return lRoll.localeCompare(rRoll, undefined, { numeric: true, sensitivity: 'base' });
+  }
+
+  const leftRegNum = numericValueFromString(left.registerNumber || left['Register Number'] || left.registerNumber);
+  const rightRegNum = numericValueFromString(right.registerNumber || right['Register Number'] || right.registerNumber);
+  if (!Number.isNaN(leftRegNum) || !Number.isNaN(rightRegNum)) {
+    if (Number.isNaN(leftRegNum)) return -1;
+    if (Number.isNaN(rightRegNum)) return 1;
+    return leftRegNum - rightRegNum;
+  }
+
+  const lReg = String(left.registerNumber || left['Register Number'] || '').trim();
+  const rReg = String(right.registerNumber || right['Register Number'] || '').trim();
+  return lReg.localeCompare(rReg, undefined, { numeric: true, sensitivity: 'base' });
 }
 
 function sortStudents(left, right) {
@@ -1125,21 +1201,26 @@ function sortStudentsWithDirection(left, right, options = {}) {
 }
 
 function sortExportRowsForExcel(rows) {
-  return [...rows].sort((left, right) => compareStudentOrder({
-    department: left.department,
-    deptName: left.deptName,
-    year: left.year,
-    name: left.studentName || left.name,
-    rollNumber: left.rollNumber,
-    registerNumber: left.registerNumber
-  }, {
-    department: right.department,
-    deptName: right.deptName,
-    year: right.year,
-    name: right.studentName || right.name,
-    rollNumber: right.rollNumber,
-    registerNumber: right.registerNumber
-  }));
+  // Use central compareStudentOrder to ensure consistent ordering across exports
+  return [...rows].sort((left, right) => {
+    const a = {
+      department: left['Department Category'] || left.department || left['Aided / Self Finance'] || left.departmentCategory,
+      deptName: left['Department Name'] || left.deptName || left['Department'] || left.dept,
+      year: left['Year'] || left.year,
+      name: left['Student Name'] || left.studentName || left.name,
+      rollNumber: left['ROLL NUMBER'] || left['Roll Number'] || left.rollNumber || left.roll,
+      registerNumber: left['REGISTER NUMBER'] || left['Register Number'] || left.registerNumber || left.register
+    };
+    const b = {
+      department: right['Department Category'] || right.department || right['Aided / Self Finance'] || right.departmentCategory,
+      deptName: right['Department Name'] || right.deptName || right['Department'] || right.dept,
+      year: right['Year'] || right.year,
+      name: right['Student Name'] || right.studentName || right.name,
+      rollNumber: right['ROLL NUMBER'] || right['Roll Number'] || right.rollNumber || right.roll,
+      registerNumber: right['REGISTER NUMBER'] || right['Register Number'] || right.registerNumber || right.register
+    };
+    return compareStudentOrder(a, b);
+  });
 }
 
 globalThis.sortStudentsWithDirection = sortStudentsWithDirection;
