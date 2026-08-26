@@ -28,6 +28,7 @@ global.document = {
   querySelectorAll() { return []; },
   createElement() { return noopEl(); },
 };
+const originalGetElementById = global.document.getElementById;
 global.window = {};
 global.localStorage = { getItem() { return null; }, setItem() {} };
 global.sessionStorage = { getItem() { return null; }, setItem() {}, removeItem() {} };
@@ -155,9 +156,161 @@ try {
     'Self-Finance|2nd Year|Physics|Zoe',
   ]);
 
+  const exportedRows = [
+    { studentName: 'Charlie', department: 'Aided', deptName: 'Computer Science', year: '1st Year', date: '2024-01-10', rollNumber: '4', registerNumber: 'A110' },
+    { studentName: 'Alice', department: 'Aided', deptName: 'Computer Science', year: '1st Year', date: '2024-05-02', rollNumber: '3', registerNumber: 'A100' },
+    { studentName: 'Bob', department: 'Aided', deptName: 'Computer Science', year: '1st Year', date: '2024-01-12', rollNumber: '2', registerNumber: 'A101' },
+    { studentName: 'Zoe', department: 'Self-Finance', deptName: 'Physics', year: '2nd Year', date: '2024-05-02', rollNumber: '12', registerNumber: 'B400' },
+    { studentName: 'Dora', department: 'Aided', deptName: 'Maths', year: '2nd Year', date: '2024-03-03', rollNumber: '5', registerNumber: 'A200' },
+  ];
+
+  const studentExportFilterCheck = {
+    appData: {
+      students: [
+        { id: 's1', name: 'Ada', year: '1st Year', deptName: 'Computer Science', department: 'Aided', section: 'A', rollNumber: '11', registerNumber: 'CS11', mobile: '999', teamIds: ['Team Alpha'] },
+        { id: 's2', name: 'Ben', year: '2nd Year', deptName: 'Computer Science', department: 'Aided', section: 'B', rollNumber: '12', registerNumber: 'CS12', mobile: '888', teamIds: ['Team Alpha'] },
+        { id: 's3', name: 'Cora', year: '2nd Year', deptName: 'Electronics', department: 'Self-Finance', section: 'C', rollNumber: '13', registerNumber: 'EL13', mobile: '777', teamIds: ['Team Beta'] },
+      ],
+    },
+  };
+  const originalFilterYear = global.document.getElementById;
+  global.document.getElementById = (id) => {
+    if (id === 'studentFilterYear') return { value: '2nd Year' };
+    if (id === 'studentFilterDept') return { value: 'Computer Science' };
+    if (id === 'studentExportModal') return { classList: { remove() {}, add() {} } };
+    if (id === 'exportColumnsList') return {
+      querySelectorAll: () => [
+        { checked: true, dataset: { key: 'name' } },
+        { checked: true, dataset: { key: 'deptName' } },
+        { checked: true, dataset: { key: 'section' } },
+        { checked: true, dataset: { key: 'rollNumber' } },
+        { checked: true, dataset: { key: 'registerNumber' } },
+        { checked: true, dataset: { key: 'mobile' } },
+        { checked: true, dataset: { key: 'team' } },
+      ],
+    };
+    if (id === 'exportSelectAll') return { checked: true, onchange: null };
+    if (id === 'cancelStudentExportBtn') return { addEventListener() {} };
+    if (id === 'closeStudentExportModal') return { addEventListener() {} };
+    if (id === 'startStudentExportBtn') return { addEventListener() {} };
+    return originalFilterYear(id);
+  };
+  const originalAppState = global.appData;
+  global.appData = studentExportFilterCheck.appData;
+  const originalSheet = global.XLSX.utils.json_to_sheet;
+  const originalQuerySelectorAll = global.document.querySelectorAll;
+  let studentExportSheetData;
+  global.XLSX.utils.json_to_sheet = (data) => {
+    studentExportSheetData = data;
+    return data;
+  };
+  global.document.querySelectorAll = (selector) => {
+    if (selector === '#exportColumnsList input[type="checkbox"]') {
+      return [
+        { checked: true, dataset: { key: 'name' } },
+        { checked: true, dataset: { key: 'deptName' } },
+        { checked: true, dataset: { key: 'year' } },
+        { checked: true, dataset: { key: 'section' } },
+        { checked: true, dataset: { key: 'rollNumber' } },
+        { checked: true, dataset: { key: 'registerNumber' } },
+        { checked: true, dataset: { key: 'mobile' } },
+        { checked: true, dataset: { key: 'team' } },
+      ];
+    }
+    return [];
+  };
+  const filteredStudentExportResult = await global.startStudentExport();
+  assert.strictEqual(filteredStudentExportResult.ok, true);
+  assert.strictEqual(studentExportSheetData.length, 1);
+  assert.strictEqual(studentExportSheetData[0]['Student Name'], 'Ben');
+  assert.strictEqual(Object.keys(studentExportSheetData[0]).includes('Year'), true);
+  assert.strictEqual(Object.keys(studentExportSheetData[0]).includes('Date'), false);
+  assert.strictEqual(Object.keys(studentExportSheetData[0]).includes('Hour-wise attendance'), false);
+  global.XLSX.utils.json_to_sheet = originalSheet;
+  global.appData = originalAppState;
+  global.document.getElementById = originalGetElementById;
+  global.document.querySelectorAll = originalQuerySelectorAll;
+  const sortedExportRows = exportedRows.slice().sort((left, right) => {
+    const leftOut = { department: left.department, deptName: left.deptName, year: left.year, date: left.date, name: left.studentName, rollNumber: left.rollNumber, registerNumber: left.registerNumber };
+    const rightOut = { department: right.department, deptName: right.deptName, year: right.year, date: right.date, name: right.studentName, rollNumber: right.rollNumber, registerNumber: right.registerNumber };
+    return sortStudents(leftOut, rightOut);
+  });
+  assert.deepStrictEqual(sortedExportRows.map(r => `${r.department}|${r.year}|${r.studentName}|${r.rollNumber}`), [
+    'Aided|1st Year|Alice|3',
+    'Aided|1st Year|Bob|2',
+    'Aided|1st Year|Charlie|4',
+    'Aided|2nd Year|Dora|5',
+    'Self-Finance|2nd Year|Zoe|12',
+  ]);
+
+  const descendingRows = [
+    { department: 'Aided', year: '1st Year', deptName: 'Computer Science', name: 'Same Student', rollNumber: '2', registerNumber: 'A101' },
+    { department: 'Aided', year: '1st Year', deptName: 'Computer Science', name: 'Same Student', rollNumber: '4', registerNumber: 'A110' },
+    { department: 'Aided', year: '1st Year', deptName: 'Computer Science', name: 'Same Student', rollNumber: '3', registerNumber: 'A100' },
+  ];
+  const descendingSort = descendingRows.slice().sort((a, b) => global.sortStudentsWithDirection(a, b, { rollNumberDirection: 'desc', registerNumberDirection: 'desc' }));
+  assert.deepStrictEqual(descendingSort.map(r => `${r.name}|${r.rollNumber}|${r.registerNumber}`), [
+    'Same Student|4|A110',
+    'Same Student|3|A100',
+    'Same Student|2|A101',
+  ]);
+
   global.XLSX.writeFile = function (...args) {
     global.__lastWriteFileArgs = args;
   };
+
+  const originalJsonToSheet = global.XLSX.utils.json_to_sheet;
+  let capturedSheetData = null;
+  global.XLSX.utils.json_to_sheet = function (data) {
+    capturedSheetData = data;
+    return data;
+  };
+
+  global.appData = {
+    attendance: [
+      {
+        teamId: 'Team Alpha',
+        date: '2024-01-10',
+        studentAttendanceMap: { s1: { h1: 'P', h2: 'P', h3: 'P', h4: 'P', h5: 'P' } },
+        markedBy: 'Admin',
+      },
+      {
+        teamId: 'Team Alpha',
+        date: '2024-01-11',
+        studentAttendanceMap: { s1: { h1: 'P', h2: 'P', h3: 'P', h4: 'P', h5: 'P' } },
+        markedBy: 'Admin',
+      },
+    ],
+    students: [
+      { id: 's1', name: 'Ada', rollNumber: '123', registerNumber: '456', deptName: 'Computer Science', department: 'Aided', section: 'A', teamId: 'Team Alpha', year: 'First Year', mobile: '999' },
+    ],
+  };
+
+  const attendanceExportModal = { classList: { remove() {}, add() {} } };
+  global.document.getElementById = (id) => {
+    if (id === 'attendanceExportModal') return attendanceExportModal;
+    if (id === 'filterDate') return { value: '' };
+    if (id === 'filterTeam') return { value: 'ALL' };
+    if (id === 'filterDeptName') return { value: 'ALL' };
+    if (id === 'filterDept') return { value: 'ALL' };
+    if (id === 'filterYear') return { value: 'ALL' };
+    return noopEl();
+  };
+  global.document.querySelectorAll = () => [
+    { checked: true, dataset: { key: 'studentName' } },
+    { checked: true, dataset: { key: 'section' } },
+    { checked: true, dataset: { key: 'deptName' } },
+    { checked: true, dataset: { key: 'department' } },
+    { checked: true, dataset: { key: 'teamName' } },
+    { checked: true, dataset: { key: 'hourWiseAttendance' } },
+    { checked: true, dataset: { key: 'rollNumber' } },
+    { checked: true, dataset: { key: 'registerNumber' } },
+  ];
+  global.selectedExportRecords = new Set(['s1__2024-01-10__Team Alpha', 's1__2024-01-11__Team Alpha']);
+  global.exportToExcel();
+  assert.strictEqual(Array.isArray(capturedSheetData) ? capturedSheetData.length : 0, 1);
+  global.XLSX.utils.json_to_sheet = originalJsonToSheet;
+  global.document.getElementById = originalGetElementById;
 
   const classList = () => {
     const set = new Set();
@@ -240,7 +393,6 @@ try {
   const studentFilterDept = { selectedOptions: [], options: [] };
   const studentSearchInput = { value: '' };
 
-  const originalGetElementById = global.document.getElementById;
   global.document.getElementById = (id) => {
     if (id === 'studentExportModal') return studentExportModal;
     if (id === 'studentExportProgress') return studentExportProgress;

@@ -25,6 +25,7 @@ let appData = JSON.parse(JSON.stringify(defaultAppData));
 let currentUser = null;
 let currentTabId = 'dashboardTab';
 // selected IDs for export
+globalThis.selectedExportStudents = new Set();
 globalThis.selectedExportRecords = new Set();
 
 Object.defineProperty(globalThis, 'currentUser', {
@@ -52,42 +53,6 @@ function withTimeout(promise, timeoutMs = API_TIMEOUT_MS) {
       setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
     })
   ]);
-}
-
-// Write workbook to a downloadable file in-browser, test-friendly and with Node fallback.
-async function downloadWorkbook(wb, fname) {
-  try { globalThis._lastXlsxAttempt = (globalThis._lastXlsxAttempt || 0) + 1; } catch (e) {}
-  try {
-    if (typeof XLSX !== 'undefined' && typeof XLSX.write === 'function') {
-      const arrayBuf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      const blob = new Blob([arrayBuf], { type: 'application/octet-stream' });
-      try { globalThis._lastXlsxBlob = blob; globalThis._lastXlsxFileName = fname; } catch (e) {}
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fname;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        URL.revokeObjectURL(url);
-        if (a && a.parentNode) a.parentNode.removeChild(a);
-      }, 2000);
-      return;
-    }
-  } catch (e) {
-    try { globalThis._lastXlsxError = String(e); } catch (err) {}
-    console.warn('XLSX.write fallback used', e && e.message);
-  }
-
-  // Fallback to writeFile when available (node tests mock this)
-  if (typeof XLSX !== 'undefined' && typeof XLSX.writeFile === 'function') {
-    try { globalThis._lastXlsxFileName = fname; } catch (e) {}
-    XLSX.writeFile(wb, fname);
-    return;
-  }
-
-  throw new Error('No XLSX write method available');
 }
 
 Object.defineProperty(globalThis, 'appData', {
@@ -573,12 +538,6 @@ function initUIEvents() {
     document.getElementById(id).addEventListener('change', renderRecordsTable);
   });
   document.getElementById('applyHistoryFiltersBtn').addEventListener('click', renderRecordsTable);
-  // Student Master filters wiring
-  ['studentFilterTeam','studentFilterDeptName','studentFilterDept','studentFilterYear'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('change', renderStudentsTable);
-  });
-  document.getElementById('applyStudentFiltersBtn')?.addEventListener('click', renderStudentsTable);
 
   document.getElementById('clearDateFilterBtn').addEventListener('click', () => {
     document.getElementById('filterDate').value = '';
@@ -587,57 +546,35 @@ function initUIEvents() {
 
   document.getElementById('deleteDateBtn').addEventListener('click', deleteAttendanceDate);
   document.getElementById('deleteMonthBtn').addEventListener('click', deleteAttendanceMonth);
-  const onlyFiveHourDatesBtn = document.getElementById('onlyFiveHourDatesBtn');
-  if (onlyFiveHourDatesBtn) {
-    onlyFiveHourDatesBtn.addEventListener('click', toggleOnlyFiveHourDatesFilter);
-  }
-  // Export columns select-all wiring
-  const exportColsSelectAll = document.getElementById('exportColumnsSelectAll');
-  if (exportColsSelectAll) {
-    exportColsSelectAll.addEventListener('change', (e) => {
-      const checked = e.target.checked;
-      document.querySelectorAll('.export-col-checkbox').forEach(cb => { cb.checked = checked; });
-    });
-    // update select-all when individual checkboxes are toggled
-    document.querySelectorAll('.export-col-checkbox').forEach(cb => {
-      cb.addEventListener('change', () => {
-        exportColsSelectAll.checked = Array.from(document.querySelectorAll('.export-col-checkbox')).every(x => x.checked);
-      });
-    });
-  }
-  // Student Export columns select-all wiring
-  const studentExportColsSelectAll = document.getElementById('studentExportColsSelectAll');
-  if (studentExportColsSelectAll) {
-    studentExportColsSelectAll.addEventListener('change', (e) => {
-      const checked = e.target.checked;
-      document.querySelectorAll('.student-export-col-checkbox').forEach(cb => { cb.checked = checked; });
-    });
-    document.querySelectorAll('.student-export-col-checkbox').forEach(cb => {
-      cb.addEventListener('change', () => {
-        studentExportColsSelectAll.checked = Array.from(document.querySelectorAll('.student-export-col-checkbox')).every(x => x.checked);
-      });
-    });
-  }
-  // Removed direct export from Attendance History here so the Export button
-  // reuses the Student Export modal (exports filtered/selected student data).
+  document.getElementById('exportExcelBtn').addEventListener('click', openAttendanceExportModal);
+  document.getElementById('cancelAttendanceExportBtn')?.addEventListener('click', () => closeModal('attendanceExportModal'));
+  document.getElementById('closeAttendanceExportModal')?.addEventListener('click', () => closeModal('attendanceExportModal'));
+  document.getElementById('startAttendanceExportBtn')?.addEventListener('click', exportToExcel);
   document.getElementById('studentSearchInput').addEventListener('input', renderStudentsTable);
   document.getElementById('clearStudentSearchBtn').addEventListener('click', () => {
     document.getElementById('studentSearchInput').value = '';
     renderStudentsTable();
   });
-  // Student Directory filter controls removed from the UI; skip binding their handlers.
+  document.getElementById('applyStudentFiltersBtn').addEventListener('click', renderStudentsTable);
+  document.getElementById('clearStudentFiltersBtn').addEventListener('click', () => {
+    const y = document.getElementById('studentFilterYear');
+    const d = document.getElementById('studentFilterDept');
+    if (y) y.value = 'ALL';
+    if (d) d.value = 'ALL';
+    renderStudentsTable();
+  });
   
 
   document.getElementById('openAddStudentModalBtn').addEventListener('click', () => openStudentModal());
   const exportStudentsBtn = document.getElementById('exportStudentsBtn');
-  if (exportStudentsBtn) exportStudentsBtn.addEventListener('click', () => startStudentExport(undefined, { previewOnly: false, format: 'excel' }));
-  const studentOnlyFiveHourBtn = document.getElementById('studentOnlyFiveHourBtn');
-  if (studentOnlyFiveHourBtn) studentOnlyFiveHourBtn.addEventListener('click', toggleOnlyFiveHourDatesFilter);
-  // Bind export handler to any Export Excel buttons (some UI layouts had duplicate IDs)
-  const exportExcelBtns = document.querySelectorAll('#exportExcelBtn');
-  if (exportExcelBtns && exportExcelBtns.length) {
-    exportExcelBtns.forEach(btn => btn.addEventListener('click', exportToExcel));
-  }
+  if (exportStudentsBtn) exportStudentsBtn.addEventListener('click', openStudentExportModal);
+
+  const exportExcelBtn = document.getElementById('exportExcelBtn');
+  if (exportExcelBtn) exportExcelBtn.addEventListener('click', () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('attendance-export-requested'));
+    }
+  });
   document.getElementById('closeStudentModal').addEventListener('click', () => closeModal('studentModal'));
   document.getElementById('cancelStudentBtn').addEventListener('click', () => closeModal('studentModal'));
   document.getElementById('studentForm').addEventListener('submit', handleSaveStudent);
@@ -702,621 +639,146 @@ function initUIEvents() {
   }
 }
 
-// Student Export Modal & Logic
-globalThis.startStudentExport = startStudentExport;
+function getStudentHourAttendanceSummary(studentId) {
+  if (!Array.isArray(appData?.attendance)) return 'N/A';
 
-// Student export modal removed — exports are triggered directly from buttons.
-
-
-
-function closeModal(id) {
-  const m = document.getElementById(id);
-  if (m) m.classList.add('hidden');
-}
-
-async function startStudentExport(columns, options = {}) {
-  try { window._startStudentExportTrace = window._startStudentExportTrace || []; window._startStudentExportTrace.push({when:Date.now(), step:'startStudentExport_enter'}); } catch (e) {}
-  // If called without `columns` read selections from UI modal (new flow)
-  let selectedCols = [];
-  let headers = [];
-  if (Array.isArray(columns) && columns.length) {
-    selectedCols = columns.map(c => c.key);
-    headers = columns.map(c => c.label);
-  } else {
-    const inputs = Array.from(document.querySelectorAll('#exportColumnsList input[type="checkbox"]'));
-    if (inputs && inputs.length) {
-      inputs.forEach(i => {
-        if (i.checked) {
-          const key = i.dataset.key || i.getAttribute('data-key') || i.id.replace(/^exportField_/, '');
-          selectedCols.push(i.dataset.key || i.getAttribute('data-key'));
-        }
-      });
-    } else {
-      // No modal export columns list; try Student Master column checkboxes
-      const studentCols = Array.from(document.querySelectorAll('.student-export-col-checkbox'));
-      if (studentCols && studentCols.length) {
-        studentCols.forEach(i => {
-          if (i.checked) selectedCols.push(i.dataset.key || i.getAttribute('data-key'));
-        });
-      } else {
-        // No modal or student checkbox UI present — fall back to a sane default column set
-        selectedCols = ['name', 'rollNumber', 'registerNumber', 'mobile', 'deptName', 'year', 'department', 'section', 'attendancePercent'];
-      }
-    }
-    // map keys to friendly headers
-    const labelMap = {
-      name: 'Student Name', rollNumber: 'Roll Number', registerNumber: 'Register Number', mobile: 'Mobile Number',
-      deptName: 'Department Name', year: 'Year', department: 'Department Category', section: 'Section', teamIds: 'Assign Event Teams',
-      hoursPresent: 'Hours Present', hoursAbsent: 'Hours Absent', attendancePercent: 'Attendance %'
-    };
-    headers = selectedCols.map(k => labelMap[k] || k);
-  }
-
-  try { window._startStudentExportTrace.push({when:Date.now(), step:'cols_selected', cols: selectedCols.length}); } catch (e) {}
-
-  // format selection (excel or word). Allow callers to override via options.format when modal is removed.
-  const format = options.format || (document.getElementById('exportFormatWord') && document.getElementById('exportFormatWord').checked ? 'word' : 'excel');
-  const previewOnly = Boolean(options.previewOnly);
-  // gather filter selections for Year/Department from Student Master filters
-  const yearSelect = document.getElementById('studentFilterYear');
-  const deptSelect = document.getElementById('studentFilterDept');
-  const searchInput = document.getElementById('studentSearchInput');
-  const selectedYears = yearSelect ? Array.from(yearSelect.selectedOptions).map(o => o.value).filter(Boolean) : [];
-  const selectedDepts = deptSelect ? Array.from(deptSelect.selectedOptions).map(o => o.value).filter(Boolean) : [];
-  const searchQuery = searchInput ? searchInput.value.trim().toLowerCase() : '';
-  const exportAll = !(selectedYears.length || selectedDepts.length || searchQuery);
-
-  // show filter summary in preview area by reading both Student Master and Attendance History controls
-  function renderExportFilterSummary() {
-    const fs = document.getElementById('exportFiltersSummary');
-    if (!fs) return;
-    const parts = [];
-
-    // Student Master filters
-    const sYear = document.getElementById('studentFilterYear');
-    const sDept = document.getElementById('studentFilterDept');
-    const sSearch = document.getElementById('studentSearchInput');
-    const selectedYears = sYear ? Array.from(sYear.selectedOptions).map(o => o.value).filter(Boolean) : [];
-    const selectedDepts = sDept ? Array.from(sDept.selectedOptions).map(o => o.value).filter(Boolean) : [];
-    const searchVal = sSearch ? sSearch.value.trim() : '';
-    if (selectedYears.length) parts.push(`Years: ${selectedYears.join(', ')}`);
-    if (selectedDepts.length) parts.push(`Departments: ${selectedDepts.join(', ')}`);
-    if (searchVal) parts.push(`Search: "${searchVal}"`);
-
-    // Attendance History filters
-    const hTeamEl = document.getElementById('filterTeam');
-    const hDeptNameEl = document.getElementById('filterDeptName');
-    const hDeptCatEl = document.getElementById('filterDept');
-    const hYearEl = document.getElementById('filterYear');
-    const hDateEl = document.getElementById('filterDate');
-    const hTeam = hTeamEl ? hTeamEl.value : '';
-    const hDeptName = hDeptNameEl ? hDeptNameEl.value : '';
-    const hDeptCat = hDeptCatEl ? hDeptCatEl.value : '';
-    const hYear = hYearEl ? hYearEl.value : '';
-    const hDate = hDateEl ? hDateEl.value : '';
-    if (hTeam && hTeam !== 'ALL') parts.push(`Team: ${hTeam}`);
-    if (hDeptName && hDeptName !== 'ALL') parts.push(`Dept Name: ${hDeptName}`);
-    if (hDeptCat && hDeptCat !== 'ALL') parts.push(`Dept Category: ${hDeptCat}`);
-    if (hYear && hYear !== 'ALL') parts.push(`Year: ${hYear}`);
-    if (hDate) parts.push(`Date: ${hDate}`);
-
-    fs.textContent = parts.length ? parts.join(' · ') : 'No filters applied';
-    return fs.textContent;
-  }
-
-  // Prepare a function to fetch rows. Prefer Firestore-level querying when possible.
-  let rows = [];
-  const canQueryFirestore = !!firestoreDb && localStorage.getItem(OFFLINE_MODE_KEY) !== 'true';
-
-  if (canQueryFirestore) {
-    try {
-      const colRef = firestoreDb.collection('students');
-      const yearVals = (selectedYears.length && !selectedYears.includes('ALL')) ? selectedYears : [];
-      const deptVals = (selectedDepts.length && !selectedDepts.includes('ALL')) ? selectedDepts : [];
-
-      // Choose a primary filter to apply at DB level (prefer smaller list)
-      let primaryField = null;
-      let primaryVals = [];
-      let secondaryField = null;
-      let secondaryVals = [];
-      if (yearVals.length && deptVals.length) {
-        if (yearVals.length <= deptVals.length) {
-          primaryField = 'year'; primaryVals = yearVals; secondaryField = 'deptName'; secondaryVals = deptVals;
-        } else {
-          primaryField = 'deptName'; primaryVals = deptVals; secondaryField = 'year'; secondaryVals = yearVals;
-        }
-      } else if (yearVals.length) { primaryField = 'year'; primaryVals = yearVals; }
-      else if (deptVals.length) { primaryField = 'deptName'; primaryVals = deptVals; }
-
-      const results = [];
-      if (primaryField && primaryVals.length) {
-        // Firestore 'in' supports up to 10 values per query; batch if needed.
-        const batches = [];
-        for (let i = 0; i < primaryVals.length; i += 10) batches.push(primaryVals.slice(i, i + 10));
-        for (const batch of batches) {
-          let q = colRef.where(primaryField, 'in', batch);
-          // optionally apply a single equality secondary filter when only one value
-          if (secondaryField && secondaryVals.length === 1) q = q.where(secondaryField, '==', secondaryVals[0]);
-          const snap = await q.get();
-          snap.forEach(doc => results.push(doc.data()));
-        }
-      } else {
-        // no primary filter selected — fetch all and filter client-side
-        const snap = await colRef.get();
-        snap.forEach(doc => results.push(doc.data()));
-      }
-
-      // client-side apply secondary filter if necessary
-      if (secondaryField && secondaryVals.length) {
-        rows = results.filter(r => secondaryVals.includes(r[secondaryField]));
-      } else {
-        rows = results;
-      }
-
-      // If user selected 'filtered' scope, also apply search query client-side
-      if (!exportAll) {
-        const searchQuery = document.getElementById('studentSearchInput').value.toLowerCase();
-        rows = rows.filter(s => (s.name || '').toLowerCase().includes(searchQuery) || (s.rollNumber || '').toLowerCase().includes(searchQuery) || (s.registerNumber || '').toLowerCase().includes(searchQuery) || ((s.deptName || '').toLowerCase().includes(searchQuery)));
-      }
-    } catch (err) {
-      console.warn('Firestore student query failed, falling back to local filtering.', err && err.message);
-      // fallback to local
-      rows = appData.students.slice();
-    }
-  } else {
-    // client-side filtering from appData
-    rows = appData.students.slice();
-    if (!exportAll) {
-      const searchQuery = document.getElementById('studentSearchInput').value.toLowerCase();
-      rows = rows.filter(s => (s.name || '').toLowerCase().includes(searchQuery) || (s.rollNumber || '').toLowerCase().includes(searchQuery) || (s.registerNumber || '').toLowerCase().includes(searchQuery) || ((s.deptName || '').toLowerCase().includes(searchQuery)));
-    }
-    if (selectedYears.length && !selectedYears.includes('ALL')) rows = rows.filter(s => selectedYears.includes(s.year || ''));
-    if (selectedDepts.length && !selectedDepts.includes('ALL')) rows = rows.filter(s => selectedDepts.includes(s.deptName || s.department || ''));
-  }
-
-  try { window._startStudentExportTrace.push({when:Date.now(), step:'rows_fetched', rows: Array.isArray(rows) ? rows.length : null}); } catch (e) {}
-
-  // If Firestore was queried but returned no rows, fall back to local `appData.students` when available.
-  if (canQueryFirestore && Array.isArray(rows) && rows.length === 0 && Array.isArray(appData?.students) && appData.students.length > 0) {
-    try {
-      rows = appData.students.slice();
-      if (!exportAll) {
-        const searchQuery = document.getElementById('studentSearchInput').value.toLowerCase();
-        rows = rows.filter(s => (s.name || '').toLowerCase().includes(searchQuery) || (s.rollNumber || '').toLowerCase().includes(searchQuery) || (s.registerNumber || '').toLowerCase().includes(searchQuery) || ((s.deptName || '').toLowerCase().includes(searchQuery)));
-      }
-      if (selectedYears.length && !selectedYears.includes('ALL')) rows = rows.filter(s => selectedYears.includes(s.year || ''));
-      if (selectedDepts.length && !selectedDepts.includes('ALL')) rows = rows.filter(s => selectedDepts.includes(s.deptName || s.department || ''));
-      try { window._startStudentExportTrace.push({when:Date.now(), step:'rows_fallback_to_local', rows: rows.length}); } catch (e) {}
-    } catch (e) {
-      // ignore fallback failures
-    }
-  }
-
-  // Additionally, respect Attendance History filters (team/date/department/year) when present.
-  // This ensures exports from the Attendance History area only include students who appear
-  // in attendance records matching the selected history filters.
-  try {
-    const hTeamVal = document.getElementById('filterTeam') ? document.getElementById('filterTeam').value : '';
-    const hDateVal = document.getElementById('filterDate') ? document.getElementById('filterDate').value : '';
-    const hDeptNameVal = document.getElementById('filterDeptName') ? document.getElementById('filterDeptName').value : '';
-    const hDeptVal = document.getElementById('filterDept') ? document.getElementById('filterDept').value : '';
-    const hYearVal = document.getElementById('filterYear') ? document.getElementById('filterYear').value : '';
-
-    const anyHistoryFilter = (hTeamVal && hTeamVal !== 'ALL') || hDateVal || (hDeptNameVal && hDeptNameVal !== 'ALL') || (hDeptVal && hDeptVal !== 'ALL') || (hYearVal && hYearVal !== 'ALL');
-    if (anyHistoryFilter && Array.isArray(appData.attendance)) {
-      const studentIds = new Set();
-      appData.attendance.forEach(record => {
-        if (hTeamVal && hTeamVal !== 'ALL' && record.teamId !== hTeamVal) return;
-        if (hDateVal && record.date !== hDateVal) return;
-        if (hDeptNameVal && hDeptNameVal !== 'ALL' && record.deptName && record.deptName !== hDeptNameVal) return;
-        if (hDeptVal && hDeptVal !== 'ALL' && record.department && record.department !== hDeptVal) return;
-        if (hYearVal && hYearVal !== 'ALL' && record.year && record.year !== hYearVal) return;
-        const map = record.studentAttendanceMap || {};
-        const onlyFive = isOnlyFiveHourAttendanceFilterEnabled();
-        Object.keys(map).forEach(sid => {
-          if (!onlyFive) { studentIds.add(sid); return; }
-          const entry = map[sid] || {};
-          if (entry && (entry.h1 !== undefined || entry.h2 !== undefined || entry.h3 !== undefined || entry.h4 !== undefined || entry.h5 !== undefined)) {
-            // require at least presence of hour fields (treat as 5-hour record if keys exist)
-            studentIds.add(sid);
-          }
-        });
-      });
-      if (studentIds.size > 0) {
-        rows = rows.filter(s => studentIds.has(s.id));
-      } else {
-        // If history filters were applied but no attendance records match, result should be empty
-        rows = [];
-      }
-    }
-  } catch (e) {
-    // ignore DOM read errors and proceed with current rows
-  }
-
-  try { window._startStudentExportTrace.push({when:Date.now(), step:'after_history_filter', rows: Array.isArray(rows) ? rows.length : null}); } catch (e) {}
-
-  if (!rows || rows.length === 0) {
-    // expose debug info for automated tests / browser checks
-    try { window._lastStudentExportRows = Array.isArray(rows) ? rows.length : 0; window._lastStudentExportRowsSample = Array.isArray(rows) ? rows.slice(0,5) : []; } catch (e) {}
-    // When no rows match the selected filters/scope, avoid disruptive alerts.
-    // Show a non-blocking message in the export preview area (if available)
-    // so users can adjust filters without a modal alert.
-    const previewContainer = document.getElementById('exportPreviewContainer');
-    if (previewContainer) {
-      previewContainer.innerHTML = '<div style="color:var(--text-muted)">No student records found for the selected filters/scope.</div>';
-    }
-    return;
-  }
-
-  // Selection model removed: always export visible/filtered rows.
-
-  // enforce permission: non-admins can only export students in their teams (best-effort fallback)
-  if (currentUser?.role !== 'admin') {
-    const permittedTeams = getUserTeamIds(currentUser);
-    if (permittedTeams && permittedTeams.length) {
-      rows = rows.filter(s => {
-        const studentTeams = Array.isArray(s.teamIds) ? s.teamIds : (s.teamId ? [s.teamId] : []);
-        return studentTeams.some(t => permittedTeams.includes(t));
-      });
-    } else {
-      // no explicit permissions found on user object — block export for safety
-      alert('You do not have permission to export student data for any department/year. Contact an administrator.');
-      return;
-    }
-  }
-
-  // enforce allowed departments/years if present on user profile
-  if (currentUser?.role !== 'admin') {
-    if (Array.isArray(currentUser.allowedDepartments) && currentUser.allowedDepartments.length) {
-      rows = rows.filter(s => currentUser.allowedDepartments.includes(s.deptName || s.department || ''));
-    }
-    if (Array.isArray(currentUser.allowedYears) && currentUser.allowedYears.length) {
-      rows = rows.filter(s => currentUser.allowedYears.includes(s.year || ''));
-    }
-    // if after enforcement no rows remain, block
-    if (!rows.length) {
-      alert('No records available to export within your permitted departments/years.');
-      return;
-    }
-  }
-
-  // Sorting: group by Finance Type (department category), then Year (using appData.years order), Department Name, Student Name, then Roll/Register
-  const yearOrder = Array.isArray(appData.years) ? appData.years : [];
-  function rollKey(s) {
-    const r = s.rollNumber || s.registerNumber || '';
-    const num = (r || '').match(/\d+/);
-    return num ? Number(num[0]) : r.toString();
-  }
-  rows.sort((a, b) => {
-    // Group by Finance Type first
-    const fa = (a.department || '').toString();
-    const fb = (b.department || '').toString();
-    if (fa !== fb) return fa.localeCompare(fb);
-
-    // Within group: Department Name A-Z
-    const da = (a.deptName || '').toString();
-    const db = (b.deptName || '').toString();
-    if (da !== db) return da.localeCompare(db);
-
-    // Year using appData.years order
-    const ay = yearOrder.indexOf(a.year || '');
-    const by = yearOrder.indexOf(b.year || '');
-    if (ay !== by) return (ay === -1 ? 9999 : ay) - (by === -1 ? 9999 : by);
-
-    // Section A-Z
-    const sa = (a.section || '').toString();
-    const sb = (b.section || '').toString();
-    if (sa !== sb) return sa.localeCompare(sb);
-
-    // Student Name A-Z
-    const na = (a.name || '').toString();
-    const nb = (b.name || '').toString();
-    if (na !== nb) return na.localeCompare(nb);
-
-    // Fallback: roll/register
-    const ra = rollKey(a);
-    const rb = rollKey(b);
-    if (typeof ra === 'number' && typeof rb === 'number') return ra - rb;
-    return String(ra).localeCompare(String(rb));
+  const matches = appData.attendance.filter(record => {
+    const map = record?.studentAttendanceMap || {};
+    return map[studentId];
   });
 
-  try { window._startStudentExportTrace.push({when:Date.now(), step:'after_sort', rows: rows.length}); } catch (e) {}
+  if (!matches.length) return 'N/A';
 
-  // For preview: show first up to 50 rows and return
-  if (previewOnly) {
-    renderExportFilterSummary();
-    const previewSubset = rows.slice(0, 5);
-    // map rows for preview including computed attendance metrics
-    const mappedPreview = previewSubset.map(s => {
-      const out = {};
-      selectedCols.forEach(k => {
-        if (k === 'hoursPresent' || k === 'hoursAbsent') {
-          const m = computeStudentAttendanceMetrics(s.studentId || s.id || s.rollNumber, document.getElementById('filterDate')?.value || '', document.getElementById('filterTeam')?.value || '');
-          out[k] = k === 'hoursPresent' ? (m.totalScheduled ? Number((m.hoursPresent).toFixed(1)) : 0) : (m.totalScheduled ? Number((m.hoursAbsent).toFixed(1)) : 0);
-        } else {
-          out[k] = s[k] == null ? '' : (Array.isArray(s[k]) ? s[k].join(', ') : s[k]);
-        }
+  const last = matches[matches.length - 1];
+  const map = last.studentAttendanceMap?.[studentId] || {};
+  return ['h1', 'h2', 'h3', 'h4', 'h5'].map((hourKey, index) => `${index + 1}:${map[hourKey] || '-'}`).join(' | ');
+}
+
+function openStudentExportModal() {
+  const modal = document.getElementById('studentExportModal');
+  const colsContainer = document.getElementById('exportColumnsList');
+  if (!modal || !colsContainer) return;
+
+  const selectAll = document.getElementById('exportSelectAll');
+  if (selectAll) {
+    selectAll.checked = true;
+    selectAll.onchange = () => {
+      Array.from(colsContainer.querySelectorAll('input[type="checkbox"]')).forEach(cb => {
+        cb.checked = selectAll.checked;
       });
-      out.department = s.department || s.department || '';
-      return out;
+    };
+  }
+
+  Array.from(colsContainer.querySelectorAll('input[type="checkbox"]')).forEach(cb => {
+    cb.checked = true;
+  });
+
+  document.getElementById('cancelStudentExportBtn')?.addEventListener('click', () => closeModal('studentExportModal'));
+  document.getElementById('closeStudentExportModal')?.addEventListener('click', () => closeModal('studentExportModal'));
+  document.getElementById('startStudentExportBtn')?.addEventListener('click', () => startStudentExport());
+
+  modal.classList.remove('hidden');
+}
+
+globalThis.startStudentExport = async function startStudentExport(columns = [], options = {}) {
+  let selectedCols = [];
+  const modal = document.getElementById('studentExportModal');
+
+  if (Array.isArray(columns) && columns.length) {
+    selectedCols = columns.map(col => col.key || col);
+  } else if (modal) {
+    const checked = Array.from(document.querySelectorAll('#exportColumnsList input[type="checkbox"]'));
+    selectedCols = checked.filter(cb => cb.checked).map(cb => cb.dataset.key || cb.getAttribute('data-key'));
+  } else {
+    selectedCols = ['name', 'deptName', 'section', 'rollNumber', 'registerNumber', 'mobile', 'team'];
+  }
+
+  if (!selectedCols.length) {
+    alert('Please tick at least one field to export.');
+    return { ok: false };
+  }
+
+  const rowIds = Array.from(globalThis.selectedExportStudents || []);
+  let students = [...(appData?.students || [])].sort(sortStudents);
+
+  const studentYearFilter = document.getElementById('studentFilterYear');
+  const studentDeptFilter = document.getElementById('studentFilterDept');
+  if (studentYearFilter && studentYearFilter.value && studentYearFilter.value !== 'ALL') {
+    students = students.filter(student => (student.year || '') === studentYearFilter.value);
+  }
+  if (studentDeptFilter && studentDeptFilter.value && studentDeptFilter.value !== 'ALL') {
+    students = students.filter(student => (student.deptName || '') === studentDeptFilter.value);
+  }
+
+  if (rowIds.length) {
+    students = students.filter(student => rowIds.includes(student.id));
+  }
+
+  if (!students.length && typeof document !== 'undefined' && modal) {
+    alert('No student records available for the current filter selection.');
+    return { ok: false };
+  }
+
+  const exportRows = students.map(student => {
+    const row = {};
+    selectedCols.forEach(key => {
+      if (key === 'name') row[key] = student.name || '';
+      else if (key === 'year') row[key] = student.year || '';
+      else if (key === 'section') row[key] = student.section || '';
+      else if (key === 'deptName') row[key] = student.deptName || '';
+      else if (key === 'department') row[key] = student.department || '';
+      else if (key === 'team') row[key] = getStudentTeamIds(student).join(', ') || '';
+      else if (key === 'mobile') row[key] = student.mobile || '';
+      else if (key === 'rollNumber') row[key] = student.rollNumber || '';
+      else if (key === 'registerNumber') row[key] = student.registerNumber || '';
     });
-    renderExportPreview(mappedPreview, selectedCols, headers);
-    return;
-  }
+    return row;
+  });
 
-  // Build filters text for export metadata by reading both Student Master and Attendance History controls
-  const filtersText = renderExportFilterSummary() || 'No filters applied';
-
-  // Attendance filters used for computing hours present/absent
-  const hTeamVal = document.getElementById('filterTeam') ? document.getElementById('filterTeam').value : '';
-  const hDateVal = document.getElementById('filterDate') ? document.getElementById('filterDate').value : '';
-
-  function getStudentAttendanceCounts(studentId) {
-      // compute totals and consider overrides
-      let present = 0;
-      let absent = 0;
-      let totalScheduled = 0;
-      if (!Array.isArray(appData.attendance)) return { present: 0, absent: 0, totalScheduled: 0 };
-      appData.attendance.forEach(record => {
-        if (hTeamVal && hTeamVal !== 'ALL' && record.teamId !== hTeamVal) return;
-        if (hDateVal && record.date !== hDateVal) return;
-        const entry = record.studentAttendanceMap && record.studentAttendanceMap[studentId];
-        if (!entry) return;
-        ['h1','h2','h3','h4','h5'].forEach(hourKey => {
-          const v = entry[hourKey];
-          if (v != null && v !== '') {
-            totalScheduled += 1;
-            if (v === 'P') present += 1; else absent += 1;
-          }
-        });
-      });
-
-      // apply any manual overrides from appData.attendanceOverrides
-      if (Array.isArray(appData.attendanceOverrides)) {
-        appData.attendanceOverrides.forEach(ov => {
-          if (ov.studentId !== studentId) return;
-          if (hDateVal && ov.date !== hDateVal) return;
-          if (hTeamVal && hTeamVal !== 'ALL' && ov.teamId && ov.teamId !== hTeamVal) return;
-          if (ov.field === 'hoursPresent') {
-            present = Number(ov.newValue) || present;
-          }
-          if (ov.field === 'hoursAbsent') {
-            absent = Number(ov.newValue) || absent;
-          }
-        });
-      }
-
-      return { present, absent, totalScheduled };
-  }
-
-  // If user chose Word format, prepare a single .docx with grouping and return
-  if (format === 'word') {
-    try {
-      const now = new Date();
-      const yyyy = now.getFullYear();
-      const mm = String(now.getMonth() + 1).padStart(2, '0');
-      const dd = String(now.getDate()).padStart(2, '0');
-      const HH = String(now.getHours()).padStart(2, '0');
-      const MIN = String(now.getMinutes()).padStart(2, '0');
-      const SS = String(now.getSeconds()).padStart(2, '0');
-      const shortFilter = (filtersText || 'All').slice(0,80).replace(/[^a-zA-Z0-9\-_ ]/g, '').replace(/\s+/g, '_') || 'All';
-      const filename = `student_details_${yyyy}${mm}${dd}_${shortFilter}.docx`;
-
-      // map rows for display values
-      const mapped = rows.map(s => {
-        const out = {};
-        selectedCols.forEach(k => {
-          let v = s[k];
-          if (Array.isArray(v)) v = v.join(', ');
-          if (v == null) v = '';
-          out[k] = v;
-        });
-        // keep department value for grouping
-        out.department = s.department || s.department || '';
-        return out;
-      });
-
-      // include filtersText as metadata paragraph at top of the Word doc
-      await exportToWord(mapped, selectedCols, headers, filename, filtersText);
-      alert('Exported Word document.');
-      // studentExportModal removed — no modal to close
-      return;
-    } catch (err) {
-      console.error('Word export failed', err);
-      alert('Word export failed: ' + (err && err.message ? err.message : 'Unknown error'));
-    }
-  }
-
-  // Max-row guard — prevent accidental massive exports; recommend filtering or contact admin
-  const MAX_ROWS_HARD = 200000;
-  if (rows.length > MAX_ROWS_HARD) {
-    alert('Export too large (' + rows.length + ' rows). Please narrow filters or contact an administrator to export a large dataset.');
-    return;
-  }
-
-  // prepare export data mapping with formatting
-  const mapRow = (student) => {
-    const out = {};
-    selectedCols.forEach(k => {
-      let v = student[k];
-      // compute hours present/absent when requested
-      if (k === 'hoursPresent' || k === 'hoursAbsent') {
-        const counts = getStudentAttendanceCounts(student.id);
-        v = k === 'hoursPresent' ? counts.present : counts.absent;
-      }
-      // arrays like teamIds -> join
-      if (Array.isArray(v)) v = v.join(', ');
-
-      // normalize dates: keep as Date objects when possible so Excel treats as dates
-      if (v && (k.toLowerCase().includes('date') || k.toLowerCase() === 'dob' || /enroll|enrollment|dob|date/i.test(k))) {
-        const d = new Date(v);
-        if (!isNaN(d)) v = d; else v = '';
-      }
-
-      // phone numbers as text (preserve leading zeros) - prefix with apostrophe to force text in Excel
-      if (v != null && (k.toLowerCase().includes('mobile') || k.toLowerCase().includes('phone'))) {
-        v = String(v);
-        if (v && !v.startsWith("'")) v = `'${v}`;
-      }
-
-      // numeric fields: attempt parse
-      if (v != null && (['gpa', 'feesDue', 'attendancePercent', 'attendance_percent'].includes(k) || /gpa|fee|amount|percent|attendance/i.test(k))) {
-        const n = Number(String(v).replace(/[^0-9.+-]/g, ''));
-        if (!isNaN(n)) v = n;
-      }
-
-      out[k] = v == null ? '' : v;
-    });
-    // include internal ids and attendance metrics for export formatting
-    const metrics = computeStudentAttendanceMetrics(student.id, hDateVal, hTeamVal);
-    out._studentId = student.id;
-    out._totalScheduled = metrics.totalScheduled || 0;
-    out._hoursPresent = Number((metrics.hoursPresent || 0));
-    out._hoursAbsent = Number((metrics.hoursAbsent || 0));
-    out._attendancePercent = out._totalScheduled ? Number(((out._hoursPresent / out._totalScheduled) * 100).toFixed(2)) : 0;
-    // format selected percentage field if included
-    if (selectedCols.includes('attendancePercent')) out['attendancePercent'] = out._totalScheduled ? `${out._attendancePercent.toFixed(2)}%` : '0.00%';
-    return out;
+  const headerMap = {
+    name: 'Student Name',
+    deptName: 'Department',
+    year: 'Year',
+    department: 'Aided / Self Finance',
+    section: 'Section',
+    rollNumber: 'Roll Number',
+    registerNumber: 'Register Number',
+    mobile: 'Mobile Number',
+    team: 'Team',
   };
 
-  // headers are already provided from the `columns` parameter as `headers`
+  const formattedRows = exportRows.map(row => {
+    const out = {};
+    selectedCols.forEach(key => {
+      const label = headerMap[key] || key;
+      if (row[key] !== undefined) out[label] = row[key];
+    });
+    return out;
+  });
 
-  // show progress UI
-  document.getElementById('studentExportProgress').style.display = 'block';
-  const progressBar = document.getElementById('studentExportProgressBar');
-  const progressText = document.getElementById('studentExportProgressText');
-  progressBar.value = 0;
-  progressText.textContent = 'Preparing export...';
+  const workbook = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(formattedRows);
 
-  try {
-    // handle large dataset splitting per-file if too many rows
-    const total = rows.length;
-    const maxPerFile = 50000;
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const HH = String(now.getHours()).padStart(2, '0');
-    const MIN = String(now.getMinutes()).padStart(2, '0');
-    const SS = String(now.getSeconds()).padStart(2, '0');
-
-    const parts = Math.ceil(total / maxPerFile);
-    for (let part = 0; part < parts; part++) {
-      const start = part * maxPerFile;
-      const end = Math.min(total, start + maxPerFile);
-      // For each subset prepare mapped rows, and also insert group header rows where Finance Type changes
-      const rawSubset = rows.slice(start, end);
-      const subset = [];
-      let lastDept = null;
-      rawSubset.forEach(s => {
-        const deptCat = s.department || '';
-        if (deptCat !== lastDept) {
-          const hdr = {};
-          // place group header text in first selected column
-          selectedCols.forEach((k, idx) => {
-            hdr[k] = idx === 0 ? `Finance Type: ${deptCat || 'Unspecified'}` : '';
-          });
-          subset.push(hdr);
-          lastDept = deptCat;
-        }
-        subset.push(mapRow(s));
-      });
-
-      // create workbook for this part
-      const workbook = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(subset, { header: selectedCols });
-
-      // helper: shift sheet rows down by `shift` to make room for filter metadata
-      function shiftSheetDown(sheet, shift) {
-        const out = {};
-        const range = sheet['!ref'];
-        Object.keys(sheet).forEach(addr => {
-          if (addr[0] === '!') return; // skip metadata
-          const m = addr.match(/^([A-Z]+)(\d+)$/i);
-          if (!m) return;
-          const col = m[1];
-          const row = parseInt(m[2], 10);
-          const newAddr = col + (row + shift);
-          out[newAddr] = sheet[addr];
-        });
-        // adjust range
-        if (range) {
-          const m = range.match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/i);
-          if (m) {
-            out['!ref'] = `${m[1]}${parseInt(m[2], 10) + shift}:${m[3]}${parseInt(m[4], 10) + shift}`;
-          }
-        }
-        return out;
-      }
-
-      // shift existing sheet down by 3 rows to make room for metadata (Filters, Exported, Total)
-      const shifted = shiftSheetDown(ws, 3);
-
-      // set header labels on row 4 (r:3)
-      selectedCols.forEach((k, idx) => {
-        const cellAddress = typeof XLSX?.utils?.encode_cell === 'function'
-          ? XLSX.utils.encode_cell({ c: idx, r: 3 })
-          : `${String.fromCharCode(65 + idx)}4`;
-        if (!shifted[cellAddress]) shifted[cellAddress] = {};
-        shifted[cellAddress].v = headers[idx];
-      });
-
-      // insert metadata rows in first column: Filters (A1), Exported timestamp (A2), Total Records (A3)
-      const exportedAt = new Date().toISOString();
-      shifted['A1'] = { t: 's', v: `Filters: ${filtersText}` };
-      shifted['A2'] = { t: 's', v: `Exported: ${exportedAt}` };
-      shifted['A3'] = { t: 's', v: `Total Records: ${rows.length}` };
-
-      // replace ws with shifted
-      ws['!ref'] = shifted['!ref'];
-      Object.keys(ws).forEach(k => delete ws[k]);
-      Object.keys(shifted).forEach(k => ws[k] = shifted[k]);
-
-      // set reasonable column widths and types
-      ws['!cols'] = selectedCols.map(k => {
-        // wider for names, addresses; narrow for small numeric fields
-        const key = k.toLowerCase();
-        if (key.includes('name')) return { wch: 28 };
-        if (key.includes('address') || key.includes('dept') || key.includes('register')) return { wch: 22 };
-        if (key.includes('mobile') || key.includes('phone')) return { wch: 14 };
-        if (key.includes('date') || key === 'dob' || key.includes('enroll')) return { wch: 14 };
-        if (key.includes('percent') || key.includes('gpa') || key.includes('fee') || key.includes('amount')) return { wch: 12 };
-        return { wch: Math.max(10, Math.min(30, headers[selectedCols.indexOf(k)]?.length * 1.5 || 12)) };
-      });
-      XLSX.utils.book_append_sheet(workbook, ws, 'Students');
-
-      // build a sanitized filter summary for filename per required pattern
-      const shortFilter = (filtersText || 'All').slice(0,80).replace(/[^a-zA-Z0-9\-_ ]/g, '').replace(/\s+/g, '_') || 'All';
-      const partSuffix = parts > 1 ? `_part${part + 1}` : '';
-      const filename = `student_details_${yyyy}${mm}${dd}_${shortFilter}${partSuffix}.xlsx`;
-
-      await downloadWorkbook(workbook, filename);
-
-      const pct = Math.round(Math.min(100, ((end) / total) * 100));
-      if (progressBar) {
-        progressBar.value = pct;
-        progressText.textContent = `Exported ${end} of ${total} records (${pct}%)`;
-      }
-
-      try { window._startStudentExportTrace.push({when:Date.now(), step:'before_write', part, start, end}); } catch (e) {}
-      // attempt download
-      await downloadWorkbook(workbook, filename);
-      try { window._startStudentExportTrace.push({when:Date.now(), step:'after_write', part, start, end}); } catch (e) {}
-
-      // yield to UI so progress updates show
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-
-    progressBar.value = 100;
-    progressText.textContent = `Export completed (${total} records)`;
-    alert(`Export successful: ${parts} file(s) generated`);
-    // studentExportModal removed — no modal to close
-  } catch (err) {
-    console.error('Student export failed', err);
-    alert('Student export failed: ' + (err && err.message ? err.message : 'Unknown error'));
-    progressText.textContent = 'Export failed';
+  if (formattedRows.length) {
+    const columns = Object.keys(formattedRows[0]);
+    ws['!cols'] = columns.map((header) => {
+      const sample = formattedRows.reduce((max, row) => {
+        const value = row[header];
+        const text = value == null ? '' : String(value);
+        return Math.max(max, text.length);
+      }, String(header).length);
+      return { wch: Math.max(sample + 3, 14) };
+    });
+    ws['!autofilter'] = { ref: `A1:${String.fromCharCode(64 + columns.length)}${formattedRows.length + 1}` };
+    ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
   }
-}
+
+  XLSX.utils.book_append_sheet(workbook, ws, 'Student Export');
+  XLSX.writeFile(workbook, options.filename || 'STUDENT_EXPORT.xlsx');
+
+  if (modal) closeModal('studentExportModal');
+  return { ok: true, rows: exportRows.length };
+};
 
 // Keep the new premium shell and legacy sections in sync without changing app behavior.
 function switchToTab(tabId) {
@@ -1485,9 +947,6 @@ function populateDropdowns() {
   const filterTeam = document.getElementById('filterTeam');
   filterTeam.innerHTML = `<option value="ALL">All Teams</option>` + appData.teams.map(t => `<option value="${t}">${t}</option>`).join('');
 
-  const studentFilterTeam = document.getElementById('studentFilterTeam');
-  if (studentFilterTeam) studentFilterTeam.innerHTML = `<option value="ALL">All Teams</option>` + appData.teams.map(t => `<option value="${t}">${t}</option>`).join('');
-
   const filterDeptName = document.getElementById('filterDeptName');
   filterDeptName.innerHTML = `<option value="ALL">All Department Names</option>` + appData.departments.map(d => `<option value="${d}">${d}</option>`).join('');
 
@@ -1508,10 +967,8 @@ function populateDropdowns() {
 
   const studentDeptName = document.getElementById('studentDeptName');
   studentDeptName.innerHTML = appData.departments.map(d => `<option value="${d}">${d}</option>`).join('');
-  const studentFilterDeptName = document.getElementById('studentFilterDeptName');
-  if (studentFilterDeptName) studentFilterDeptName.innerHTML = `<option value="ALL">All Department Names</option>` + appData.departments.map(d => `<option value="${d}">${d}</option>`).join('');
   const studentFilterDept = document.getElementById('studentFilterDept');
-  if (studentFilterDept) studentFilterDept.innerHTML = '<option value="ALL">All (Aided & Self-Finance)</option><option value="Aided">Aided</option><option value="Self-Finance">Self-Finance</option>';
+  if (studentFilterDept) studentFilterDept.innerHTML = `<option value="ALL">All Departments</option>` + appData.departments.map(d => `<option value="${d}">${d}</option>`).join('');
 
   const studentSection = document.getElementById('studentSection');
   studentSection.innerHTML = appData.sections.map(s => `<option value="${s}">${s}</option>`).join('');
@@ -1623,9 +1080,19 @@ function getYearSortValue(yearValue) {
   return Number.isNaN(asNumber) ? Number.MAX_SAFE_INTEGER : asNumber;
 }
 
-function sortStudents(left, right) {
-  const leftCategoryRank = left.department === 'Aided' ? 0 : left.department === 'Self-Finance' ? 1 : 2;
-  const rightCategoryRank = right.department === 'Aided' ? 0 : right.department === 'Self-Finance' ? 1 : 2;
+function compareStudentOrder(left, right, options = {}) {
+  const normalizeDepartment = (value) => {
+    const department = String(value || '').trim();
+    if (department === 'Aided') return 0;
+    if (department === 'Self-Finance') return 1;
+    return 2;
+  };
+
+  const rollDirection = options.rollNumberDirection === 'desc' ? -1 : 1;
+  const registerDirection = options.registerNumberDirection === 'desc' ? -1 : 1;
+
+  const leftCategoryRank = normalizeDepartment(left.department);
+  const rightCategoryRank = normalizeDepartment(right.department);
   if (leftCategoryRank !== rightCategoryRank) return leftCategoryRank - rightCategoryRank;
 
   const leftYear = getYearSortValue(left.year);
@@ -1636,18 +1103,46 @@ function sortStudents(left, right) {
   const rightDeptName = String(right.deptName || '').trim().toUpperCase();
   if (leftDeptName !== rightDeptName) return leftDeptName.localeCompare(rightDeptName);
 
-  const leftName = String(left.name || '').trim().toUpperCase();
-  const rightName = String(right.name || '').trim().toUpperCase();
+  const leftName = String(left.name || left.studentName || '').trim().toUpperCase();
+  const rightName = String(right.name || right.studentName || '').trim().toUpperCase();
   if (leftName !== rightName) return leftName.localeCompare(rightName);
 
   const leftRoll = String(left.rollNumber || '').trim();
   const rightRoll = String(right.rollNumber || '').trim();
-  if (leftRoll !== rightRoll) return leftRoll.localeCompare(rightRoll);
+  if (leftRoll !== rightRoll) return leftRoll.localeCompare(rightRoll, undefined, { numeric: true, sensitivity: 'base' }) * rollDirection;
 
   const leftRegister = String(left.registerNumber || '').trim();
   const rightRegister = String(right.registerNumber || '').trim();
-  return leftRegister.localeCompare(rightRegister);
+  return leftRegister.localeCompare(rightRegister, undefined, { numeric: true, sensitivity: 'base' }) * registerDirection;
 }
+
+function sortStudents(left, right) {
+  return compareStudentOrder(left, right);
+}
+
+function sortStudentsWithDirection(left, right, options = {}) {
+  return compareStudentOrder(left, right, options);
+}
+
+function sortExportRowsForExcel(rows) {
+  return [...rows].sort((left, right) => compareStudentOrder({
+    department: left.department,
+    deptName: left.deptName,
+    year: left.year,
+    name: left.studentName || left.name,
+    rollNumber: left.rollNumber,
+    registerNumber: left.registerNumber
+  }, {
+    department: right.department,
+    deptName: right.deptName,
+    year: right.year,
+    name: right.studentName || right.name,
+    rollNumber: right.rollNumber,
+    registerNumber: right.registerNumber
+  }));
+}
+
+globalThis.sortStudentsWithDirection = sortStudentsWithDirection;
 
 function renderAttendanceMarkingForm() {
   const teamId = document.getElementById('markTeamSelect').value;
@@ -2088,32 +1583,6 @@ function getSortedAttendanceRecords() {
     .map(({ att }) => att);
 }
 
-function isOnlyFiveHourAttendanceFilterEnabled() {
-  const btnA = document.getElementById('onlyFiveHourDatesBtn');
-  const btnB = document.getElementById('studentOnlyFiveHourBtn');
-  const check = (el) => {
-    if (!el) return false;
-    if (el.dataset && Object.prototype.hasOwnProperty.call(el.dataset, 'active')) return el.dataset.active === 'true';
-    return el.classList?.contains('active') || false;
-  };
-  return check(btnA) || check(btnB);
-}
-
-function toggleOnlyFiveHourDatesFilter() {
-  const active = !isOnlyFiveHourAttendanceFilterEnabled();
-  // update both possible buttons if present
-  const btnMain = document.getElementById('onlyFiveHourDatesBtn');
-  const btnStudent = document.getElementById('studentOnlyFiveHourBtn');
-  [btnMain, btnStudent].forEach(btn => {
-    if (!btn) return;
-    btn.dataset.active = String(active);
-    btn.setAttribute('aria-pressed', String(active));
-    btn.textContent = active ? '5-Hour Export: ON' : '5-Hour Export: OFF';
-    btn.classList.toggle('active', active);
-  });
-  renderRecordsTable();
-}
-
 function getSortedFilteredAttendanceRows() {
   const filterDateVal = document.getElementById('filterDate').value;
   const filterTeamVal = document.getElementById('filterTeam').value;
@@ -2173,6 +1642,7 @@ globalThis.getSortedFilteredAttendanceRows = getSortedFilteredAttendanceRows;
 globalThis.isStudentMarkedInAnotherTeam = isStudentMarkedInAnotherTeam;
 globalThis.renderAttendanceMarkingForm = renderAttendanceMarkingForm;
 globalThis.sortStudents = sortStudents;
+globalThis.exportToExcel = exportToExcel;
 // Compute per-student attendance metrics respecting filters and overrides
 function computeStudentAttendanceMetrics(studentId, dateFilter = '', teamFilter = '') {
   let present = 0, absent = 0, totalScheduled = 0;
@@ -2223,14 +1693,7 @@ function renderRecordsTable() {
 
   rowList.forEach(r => {
     const tr = document.createElement('tr');
-    // compute attendance metrics for this student/date
-    const metrics = computeStudentAttendanceMetrics(r.rollNumber, r.date, r.teamName);
-    const hoursPresentVal = Number((metrics.hoursPresent).toFixed(1));
-    const hoursAbsentVal = Number((metrics.hoursAbsent).toFixed(1));
-    const pct = metrics.totalScheduled > 0 ? ((metrics.hoursPresent / metrics.totalScheduled) * 100).toFixed(2) + '%' : '0.00%';
-    const recId = `${r.studentId}__${r.date}__${r.teamName}`;
     tr.innerHTML = `
-      <td style="text-align:center"><input type="checkbox" class="record-select-row" data-id="${recId}" ${globalThis.selectedExportRecords.has(recId) ? 'checked' : ''}></td>
       <td data-label="Date">${r.date}</td>
       <td data-label="Team"><strong>${r.teamName}</strong></td>
       <td data-label="Student Name">${r.studentName}</td>
@@ -2244,83 +1707,48 @@ function renderRecordsTable() {
       <td data-label="H3" style="text-align: center;"><span class="pa-badge ${r.h3 === 'P' ? 'present' : 'absent'}">${r.h3}</span></td>
       <td data-label="H4" style="text-align: center;"><span class="pa-badge ${r.h4 === 'P' ? 'present' : 'absent'}">${r.h4}</span></td>
       <td data-label="H5" style="text-align: center;"><span class="pa-badge ${r.h5 === 'P' ? 'present' : 'absent'}">${r.h5}</span></td>
-      <td data-label="Hours Present" style="text-align:center;"><input class="input-control" type="number" step="0.1" value="${hoursPresentVal}" data-student="${r.rollNumber}" data-date="${r.date}" data-field="hoursPresent" style="width:80px"></td>
-      <td data-label="Hours Absent" style="text-align:center;"><input class="input-control" type="number" step="0.1" value="${hoursAbsentVal}" data-student="${r.rollNumber}" data-date="${r.date}" data-field="hoursAbsent" style="width:80px"></td>
-      <td data-label="Attendance %" style="text-align:center;">${pct}</td>
       <td data-label="Marked By">${r.markedBy}</td>
     `;
     tbody.appendChild(tr);
   });
-
-  // wire selection checkbox handlers for visible record rows
-  Array.from(tbody.querySelectorAll('.record-select-row')).forEach(cb => {
-    cb.addEventListener('change', () => {
-      const id = cb.dataset.id;
-      if (cb.checked) globalThis.selectedExportRecords.add(id); else globalThis.selectedExportRecords.delete(id);
-      const allVisible = Array.from(tbody.querySelectorAll('.record-select-row'));
-      const header = document.getElementById('recordsSelectAll');
-      if (header) header.checked = allVisible.length && allVisible.every(x => x.checked);
-    });
-  });
-  const recordsSelectAll = document.getElementById('recordsSelectAll');
-  if (recordsSelectAll) {
-    recordsSelectAll.checked = Array.from(tbody.querySelectorAll('.record-select-row')).every(x => x.checked);
-    recordsSelectAll.onchange = () => {
-      Array.from(tbody.querySelectorAll('.record-select-row')).forEach(cb => { cb.checked = recordsSelectAll.checked; const id = cb.dataset.id; if (recordsSelectAll.checked) globalThis.selectedExportRecords.add(id); else globalThis.selectedExportRecords.delete(id); });
-    };
-  }
-  // wire change handlers for override inputs (audit trail)
-  Array.from(tbody.querySelectorAll('input[data-field]')).forEach(input => {
-    input.addEventListener('change', (e) => {
-      const newVal = Number(input.value);
-      const studentId = input.dataset.student;
-      const date = input.dataset.date;
-      const field = input.dataset.field;
-      // find previous value via compute
-      const prev = computeStudentAttendanceMetrics(studentId, date, document.getElementById('filterTeam').value)[field === 'hoursPresent' ? 'hoursPresent' : 'hoursAbsent'];
-      // store override
-      if (!Array.isArray(appData.attendanceOverrides)) appData.attendanceOverrides = [];
-      appData.attendanceOverrides.push({ id: Date.now() + '_' + Math.random().toString(36).slice(2,8), studentId, date, teamId: document.getElementById('filterTeam').value, field, previousValue: prev, newValue: newVal, modifiedBy: currentUser?.id || 'unknown', timestamp: new Date().toISOString() });
-      // append to audit trail
-      if (!Array.isArray(appData.auditTrail)) appData.auditTrail = [];
-      appData.auditTrail.push({ studentId, date, field, previousValue: prev, newValue: newVal, modifiedBy: currentUser?.id || 'unknown', timestamp: new Date().toISOString() });
-      // re-render records table to reflect changes
-      renderRecordsTable();
-    });
-  });
 }
 
-async function exportToExcel() {
+function openAttendanceExportModal() {
+  const modal = document.getElementById('attendanceExportModal');
+  const colsContainer = document.getElementById('attendanceExportColumnsList');
+  const selectAll = document.getElementById('attendanceExportSelectAll');
+  if (!modal || !colsContainer) return;
+
+  if (selectAll) {
+    selectAll.checked = true;
+    selectAll.onchange = () => {
+      Array.from(colsContainer.querySelectorAll('input[type="checkbox"]')).forEach(cb => {
+        cb.checked = selectAll.checked;
+      });
+    };
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function exportToExcel() {
+  const modal = document.getElementById('attendanceExportModal');
+  const checkedFields = modal
+    ? Array.from(document.querySelectorAll('#attendanceExportColumnsList input[type="checkbox"]'))
+        .filter(cb => cb.checked)
+        .map(cb => cb.dataset.key || cb.getAttribute('data-key'))
+    : ['studentName', 'section', 'deptName', 'year', 'department', 'teamName', 'hourWiseAttendance', 'rollNumber', 'registerNumber'];
+
+  if (!checkedFields.length) {
+    alert('Please select at least one field to export.');
+    return;
+  }
+
   const filterDateVal = document.getElementById('filterDate').value;
-  const filterTeamVal = document.getElementById('filterTeam').value;
-  const filterDeptNameVal = document.getElementById('filterDeptName').value;
-  const filterDeptVal = document.getElementById('filterDept').value;
   const { rowList } = getSortedFilteredAttendanceRows();
-  const onlyFiveHourActive = Boolean(document.getElementById('onlyFiveHourDatesBtn')?.dataset?.active === 'true');
 
-  let exportRows = onlyFiveHourActive
-    ? [...rowList].sort((left, right) => {
-        const leftStudent = appData.students.find(student => student.id === left.studentId) || {
-          department: left.department,
-          deptName: left.deptName,
-          year: left.year,
-          name: left.studentName,
-          rollNumber: left.rollNumber,
-          registerNumber: left.registerNumber,
-        };
-        const rightStudent = appData.students.find(student => student.id === right.studentId) || {
-          department: right.department,
-          deptName: right.deptName,
-          year: right.year,
-          name: right.studentName,
-          rollNumber: right.rollNumber,
-          registerNumber: right.registerNumber,
-        };
-        return sortStudents(leftStudent, rightStudent);
-      })
-    : rowList;
+  let exportRows = [...rowList];
 
-  // If user has selected specific records in the table, export only selected ones
   if (globalThis.selectedExportRecords && globalThis.selectedExportRecords.size > 0) {
     const sel = new Set(globalThis.selectedExportRecords);
     exportRows = exportRows.filter(r => sel.has(`${r.studentId}__${r.date}__${r.teamName}`));
@@ -2330,80 +1758,85 @@ async function exportToExcel() {
     }
   }
 
-  // Determine which columns to include from the UI checkboxes
-  const checkedCols = Array.from(document.querySelectorAll('.export-col-checkbox:checked')).map(cb => cb.dataset.col);
-  if (!checkedCols || checkedCols.length === 0) {
-    alert('Please select at least one column to include in the export.');
-    return;
-  }
+  const uniqueStudentRows = new Map();
+  exportRows.forEach(row => {
+    if (!row?.studentId || uniqueStudentRows.has(row.studentId)) return;
+    uniqueStudentRows.set(row.studentId, row);
+  });
+  exportRows = sortExportRowsForExcel(Array.from(uniqueStudentRows.values()));
 
-  // Ensure each student appears only once per date in the exported sheet
-  try {
-    const seen = new Set();
-    exportRows = exportRows.filter(r => {
-      const key = `${r.studentId}__${r.date}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  } catch (e) {
-    // ignore and continue if structure unexpected
-  }
+  const fieldMap = {
+    studentName: 'STUDENT NAME',
+    section: 'SECTION',
+    deptName: 'DEPARTMENT NAME',
+    year: 'YEAR',
+    department: 'AIDED / SELF FINANCE',
+    teamName: 'TEAM',
+    hourWiseAttendance: 'HOUR WISE ATTENDANCE',
+    rollNumber: 'ROLL NUMBER',
+    registerNumber: 'REGISTER NUMBER',
+    h1: 'H1',
+    h2: 'H2',
+    h3: 'H3',
+    h4: 'H4',
+    h5: 'H5'
+  };
 
   const exportData = exportRows.map(row => {
-    const out = { 'Date': row.date };
-    checkedCols.forEach(col => {
-      switch (col) {
-        case 'Student Name': out[col] = row.studentName || ''; break;
-        case 'Roll Number': out[col] = row.rollNumber || ''; break;
-        case 'Register Number': out[col] = row.registerNumber || ''; break;
-        case 'Dept Name': out[col] = row.deptName || ''; break;
-        case 'Section': out[col] = row.section || ''; break;
-        case 'Mobile': out[col] = row.mobile || '';
-          break;
-        case 'Category': out[col] = row.department || '';
-          break;
-        case 'Team': out[col] = row.teamName || '';
-          break;
-        case 'Year': out[col] = row.year || '';
-          break;
-        case 'H1': out[col] = row.h1 || ''; break;
-        case 'H2': out[col] = row.h2 || ''; break;
-        case 'H3': out[col] = row.h3 || ''; break;
-        case 'H4': out[col] = row.h4 || ''; break;
-        case 'H5': out[col] = row.h5 || ''; break;
-        default:
-          out[col] = row[col] || '';
-      }
+    const entry = {};
+    if (checkedFields.includes('studentName')) entry[fieldMap.studentName] = row.studentName || '';
+    if (checkedFields.includes('section')) entry[fieldMap.section] = row.section || '';
+    if (checkedFields.includes('deptName')) entry[fieldMap.deptName] = row.deptName || '';
+    if (checkedFields.includes('year')) entry[fieldMap.year] = row.year || '';
+    if (checkedFields.includes('department')) entry[fieldMap.department] = row.department || '';
+    if (checkedFields.includes('teamName')) entry[fieldMap.teamName] = row.teamName || '';
+    if (checkedFields.includes('hourWiseAttendance')) {
+      entry[fieldMap.h1] = row.h1 || 'A';
+      entry[fieldMap.h2] = row.h2 || 'A';
+      entry[fieldMap.h3] = row.h3 || 'A';
+      entry[fieldMap.h4] = row.h4 || 'A';
+      entry[fieldMap.h5] = row.h5 || 'A';
+    }
+    if (checkedFields.includes('rollNumber')) entry[fieldMap.rollNumber] = row.rollNumber || '';
+    if (checkedFields.includes('registerNumber')) entry[fieldMap.registerNumber] = row.registerNumber || '';
+
+    Object.keys(entry).forEach(key => {
+      const value = entry[key];
+      if (typeof value === 'string') entry[key] = value.toUpperCase();
     });
-    // Uppercase student-related string fields (except Date and H1-H5)
-    Object.keys(out).forEach(k => {
-      if (k === 'Date') return;
-      if (['H1','H2','H3','H4','H5'].includes(k)) return;
-      if (typeof out[k] === 'string') out[k] = out[k].toUpperCase();
-    });
-    return out;
+
+    return entry;
   });
 
-  if (exportData.length === 0) {
-    alert('No data available to export with current date & filters!');
+  if (!exportData.length) {
+    alert('No data available to export with current filters.');
     return;
   }
 
   const worksheet = XLSX.utils.json_to_sheet(exportData);
+  const maxColWidth = Object.keys(exportData[0] || {}).map((key, index) => {
+    const sample = exportData.reduce((max, row) => {
+      const val = row[key];
+      const text = val == null ? '' : String(val);
+      return Math.max(max, text.length);
+    }, String(key).length);
+    return { wch: Math.max(sample + 3, 16) };
+  });
+  worksheet['!cols'] = maxColWidth;
+
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "5_Hour_Attendance_Report");
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Attendance_History');
 
-  // set column widths: Date + selected columns
-  worksheet['!cols'] = [ { wch: 12 } ].concat(checkedCols.map(c => ({ wch: (c.length > 12 ? 18 : 12) })));
+  const fileName = `Attendance_History_${filterDateVal || new Date().toISOString().split('T')[0]}.xlsx`;
+  XLSX.writeFile(workbook, fileName);
 
-  const fileName = `5_Hour_Attendance_Report_${filterDateVal || new Date().toISOString().split('T')[0]}.xlsx`;
-  await downloadWorkbook(workbook, fileName);
+  if (modal) closeModal('attendanceExportModal');
 }
 
 // Student Directory
 function renderStudentsTable() {
-  const searchQuery = document.getElementById('studentSearchInput').value.toLowerCase();
+  const searchInput = document.getElementById('studentSearchInput');
+  const searchQuery = (searchInput?.value || '').toLowerCase();
   const tbody = document.getElementById('studentsTbody');
   const clearSearchBtn = document.getElementById('clearStudentSearchBtn');
   if (clearSearchBtn) {
@@ -2411,47 +1844,24 @@ function renderStudentsTable() {
   }
   tbody.innerHTML = '';
 
-  // gather selected year/department filters
-  const yearSelect = document.getElementById('studentFilterYear');
-  const deptNameSelect = document.getElementById('studentFilterDeptName');
-  const deptCatSelect = document.getElementById('studentFilterDept');
-  const teamSelect = document.getElementById('studentFilterTeam');
-  const selectedYears = yearSelect ? Array.from(yearSelect.selectedOptions).map(o => o.value) : [];
-  const selectedDeptNames = deptNameSelect ? Array.from(deptNameSelect.selectedOptions).map(o => o.value) : [];
-  const selectedDeptCats = deptCatSelect ? Array.from(deptCatSelect.selectedOptions).map(o => o.value) : [];
-  const selectedTeam = teamSelect ? teamSelect.value : 'ALL';
+  const yearFilter = document.getElementById('studentFilterYear');
+  const deptFilter = document.getElementById('studentFilterDept');
+  const selectedYear = yearFilter?.value || 'ALL';
+  const selectedDept = deptFilter?.value || 'ALL';
 
-  const filtered = appData.students.filter(s => {
+  const filtered = [...appData.students.filter(s => {
+    const matchesYear = selectedYear === 'ALL' || (s.year || '') === selectedYear;
+    const matchesDept = selectedDept === 'ALL' || (s.deptName || '') === selectedDept;
     const matchesSearch = s.name.toLowerCase().includes(searchQuery) ||
       (s.rollNumber || '').toLowerCase().includes(searchQuery) ||
       (s.registerNumber || '').toLowerCase().includes(searchQuery) ||
       ((s.deptName || '').toLowerCase().includes(searchQuery));
 
-    let matchesYear = true;
-    if (selectedYears && selectedYears.length && !selectedYears.includes('ALL')) {
-      matchesYear = selectedYears.includes(s.year || '');
-    }
-
-    let matchesDeptName = true;
-    if (selectedDeptNames && selectedDeptNames.length && !selectedDeptNames.includes('ALL')) {
-      matchesDeptName = selectedDeptNames.includes(s.deptName || '');
-    }
-
-    let matchesDeptCat = true;
-    if (selectedDeptCats && selectedDeptCats.length && !selectedDeptCats.includes('ALL')) {
-      matchesDeptCat = selectedDeptCats.includes(s.department || '');
-    }
-
-    let matchesTeam = true;
-    if (selectedTeam && selectedTeam !== 'ALL') {
-      matchesTeam = getStudentTeamIds(s).includes(selectedTeam);
-    }
-
-    return matchesSearch && matchesYear && matchesDeptName && matchesDeptCat && matchesTeam;
-  });
+    return matchesYear && matchesDept && matchesSearch;
+  })].sort(sortStudents);
 
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 2rem;">No student records found.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: var(--text-muted); padding: 2rem;">No student records found.</td></tr>`;
     return;
   }
 
@@ -2490,22 +1900,20 @@ function openStudentModal(studentId = null) {
   if (studentId) {
     const s = appData.students.find(x => x.id === studentId);
     if (s) {
-      document.getElementById('studentModalTitle').textContent = 'Edit Student';
+      document.getElementById('studentModalTitle').textContent = 'Edit Student Data';
       document.getElementById('studentEditId').value = s.id;
-      document.getElementById('studentName').value = s.name || '';
-      document.getElementById('studentRoll').value = s.rollNumber || '';
-      document.getElementById('studentRegister').value = s.registerNumber || '';
-      document.getElementById('studentMobile').value = s.mobile || '';
-      document.getElementById('studentDeptName').value = s.deptName || '';
-      document.getElementById('studentYear').value = s.year || '';
-      document.getElementById('studentDept').value = s.department || '';
-      document.getElementById('studentSection').value = s.section || '';
-      const studentTeam = document.getElementById('studentTeam');
-      if (studentTeam) {
-        Array.from(studentTeam.options).forEach(opt => { opt.selected = false; });
-        const teamIds = Array.isArray(s.teamIds) ? s.teamIds : (s.teamId ? [s.teamId] : []);
-        Array.from(studentTeam.options).forEach(opt => { if (teamIds.includes(opt.value)) opt.selected = true; });
-      }
+      document.getElementById('studentName').value = s.name;
+      document.getElementById('studentRoll').value = s.rollNumber;
+      document.getElementById('studentRegister').value = s.registerNumber;
+      document.getElementById('studentMobile').value = s.mobile;
+      document.getElementById('studentDeptName').value = s.deptName || appData.departments[0];
+      document.getElementById('studentDept').value = s.department;
+      document.getElementById('studentYear').value = s.year || appData.years[0];
+      document.getElementById('studentSection').value = s.section;
+      const assignedTeamIds = getStudentTeamIds(s);
+      Array.from(document.getElementById('studentTeam').options).forEach(option => {
+        option.selected = assignedTeamIds.includes(option.value);
+      });
     }
   } else {
     document.getElementById('studentModalTitle').textContent = 'Add New Student';

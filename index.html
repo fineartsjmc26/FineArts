@@ -423,7 +423,37 @@
       </div>
     </section>
 
-    <!-- Student export modal removed — exports are triggered directly from buttons. -->
+    <div class="modal-backdrop hidden" id="studentExportModal">
+      <div class="modal-content" style="max-width:620px;">
+        <div class="modal-header">
+          <h3 class="modal-title">Export Student Details</h3>
+          <button class="close-btn" id="closeStudentExportModal">&times;</button>
+        </div>
+
+        <div style="padding: 1rem;">
+          <div style="font-weight:600; margin-bottom:0.5rem; display:flex; justify-content:space-between; align-items:center;">
+            <span>Select Fields</span>
+            <label style="font-size:0.85rem; color:var(--text-muted);"><input type="checkbox" id="exportSelectAll" checked> Select All</label>
+          </div>
+          <div id="exportColumnsList" style="display:grid; grid-template-columns:1fr; gap:0.5rem; max-height:260px; overflow:auto; border:1px solid var(--border); padding:0.75rem; border-radius:6px; background:#fff;">
+            <label><input type="checkbox" data-key="name" checked> Student Name</label>
+            <label><input type="checkbox" data-key="deptName" checked> Department</label>
+            <label><input type="checkbox" data-key="year" checked> Year</label>
+            <label><input type="checkbox" data-key="department" checked> Aided / Self Finance</label>
+            <label><input type="checkbox" data-key="section" checked> Section</label>
+            <label><input type="checkbox" data-key="rollNumber" checked> Roll Number</label>
+            <label><input type="checkbox" data-key="registerNumber" checked> Register Number</label>
+            <label><input type="checkbox" data-key="mobile" checked> Mobile Number</label>
+            <label><input type="checkbox" data-key="team" checked> Team</label>
+          </div>
+
+          <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem;">
+            <button class="btn btn-secondary" id="cancelStudentExportBtn" type="button">Cancel</button>
+            <button class="btn btn-primary" id="startStudentExportBtn" type="button">Export Selected</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- TAB 2: ATTENDANCE RECORDS (ATTENDANCE DATA VIEWING AREA WITH CALENDAR & CATEGORIZATION) -->
     <section id="recordsTab" class="tab-content hidden">
@@ -434,12 +464,41 @@
             <p style="color: var(--text-muted); font-size: 0.85rem;">Select any date from the calendar to view stored attendance history</p>
           </div>
           <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
-            <button class="btn btn-secondary btn-sm" id="onlyFiveHourDatesBtn" type="button" data-active="false" aria-pressed="false">
-              5-Hour Export: OFF
-            </button>
             <button class="btn btn-success" id="exportExcelBtn">
-              📥 Export Filtered Data to Excel (.xlsx)
+              Export to Excel
             </button>
+          </div>
+        </div>
+
+        <div class="modal-backdrop hidden" id="attendanceExportModal">
+          <div class="modal-content" style="max-width:620px;">
+            <div class="modal-header">
+              <h3 class="modal-title">Export Attendance History</h3>
+              <button class="close-btn" id="closeAttendanceExportModal">&times;</button>
+            </div>
+
+            <div style="padding: 1rem;">
+              <div style="font-weight:600; margin-bottom:0.5rem; display:flex; justify-content:space-between; align-items:center;">
+                <span>Select Fields</span>
+                <label style="font-size:0.85rem; color:var(--text-muted);"><input type="checkbox" id="attendanceExportSelectAll" checked> Select All</label>
+              </div>
+              <div id="attendanceExportColumnsList" style="display:grid; grid-template-columns:1fr; gap:0.5rem; max-height:260px; overflow:auto; border:1px solid var(--border); padding:0.75rem; border-radius:6px; background:#fff;">
+                <label><input type="checkbox" data-key="studentName" checked> Student Name</label>
+                <label><input type="checkbox" data-key="section" checked> Section</label>
+                <label><input type="checkbox" data-key="deptName" checked> Department Name</label>
+                <label><input type="checkbox" data-key="year" checked> Year</label>
+                <label><input type="checkbox" data-key="department" checked> Aided / Self Finance</label>
+                <label><input type="checkbox" data-key="teamName" checked> Team</label>
+                <label><input type="checkbox" data-key="hourWiseAttendance" checked> Hour-wise attendance</label>
+                <label><input type="checkbox" data-key="rollNumber" checked> Roll Number</label>
+                <label><input type="checkbox" data-key="registerNumber" checked> Register Number</label>
+              </div>
+
+              <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem;">
+                <button class="btn btn-secondary" id="cancelAttendanceExportBtn" type="button">Cancel</button>
+                <button class="btn btn-primary" id="startAttendanceExportBtn" type="button">Export Selected</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -497,30 +556,6 @@
           <button class="btn btn-primary btn-sm" id="applyHistoryFiltersBtn" type="button" style="white-space: nowrap; height: 38px; font-size: 0.8rem;">
             Apply
           </button>
-
-          <div id="exportColumnsControls" style="display:flex; flex-direction:column; gap:8px; margin-left:0.5rem;">
-            <label style="font-size:0.85rem; font-weight:600; margin-top:6px;">Select Columns to Export:</label>
-            <div style="display:flex; gap:12px; flex-wrap:wrap; max-width:780px; align-items:center;">
-              <label style="margin-right:8px;"><input type="checkbox" id="exportColumnsSelectAll" checked> <strong>Select All</strong></label>
-              <div style="display:flex; gap:12px; flex-wrap:wrap;">
-              <label><input type="checkbox" class="export-col-checkbox" data-col="Student Name" checked> Student Name</label>
-              <label><input type="checkbox" class="export-col-checkbox" data-col="Roll Number" checked> Roll Number</label>
-              <label><input type="checkbox" class="export-col-checkbox" data-col="Register Number" checked> Register Number</label>
-              <label><input type="checkbox" class="export-col-checkbox" data-col="Dept Name" checked> Department</label>
-              <label><input type="checkbox" class="export-col-checkbox" data-col="Section" checked> Section</label>
-              <label><input type="checkbox" class="export-col-checkbox" data-col="Mobile" checked> Mobile</label>
-              <label><input type="checkbox" class="export-col-checkbox" data-col="Category" checked> Aided / Self-Finance</label>
-              <label><input type="checkbox" class="export-col-checkbox" data-col="Team" checked> Team</label>
-              <label><input type="checkbox" class="export-col-checkbox" data-col="Year" checked> Year</label>
-              <label style="white-space:nowrap;"><input type="checkbox" class="export-col-checkbox" data-col="H1" checked> H1</label>
-              <label style="white-space:nowrap;"><input type="checkbox" class="export-col-checkbox" data-col="H2" checked> H2</label>
-              <label style="white-space:nowrap;"><input type="checkbox" class="export-col-checkbox" data-col="H3" checked> H3</label>
-              <label style="white-space:nowrap;"><input type="checkbox" class="export-col-checkbox" data-col="H4" checked> H4</label>
-              <label style="white-space:nowrap;"><input type="checkbox" class="export-col-checkbox" data-col="H5" checked> H5</label>
-              </div>
-            </div>
-            <label style="font-size:0.8rem; color:var(--text-muted);">Tip: Uncheck columns you don't want to appear in the exported Excel.</label>
-          </div>
         </div>
 
         <!-- Summary Stats Cards -->
@@ -581,8 +616,28 @@
           </div>
           <div style="display:flex; gap:0.5rem; align-items:center;">
             <button class="btn btn-primary admin-only" id="openAddStudentModalBtn">➕ Add New Student</button>
-            <button class="btn btn-secondary btn-sm" id="studentOnlyFiveHourBtn" type="button" data-active="false">5-Hour Export: OFF</button>
-            <button class="btn btn-success" id="exportStudentsBtn">Export to Excel</button>
+            <button class="btn btn-success" id="exportStudentsBtn">📥 Export to Excel</button>
+          </div>
+        </div>
+
+        <div class="filter-bar" style="margin-bottom: 1.25rem; align-items: flex-end;">
+          <div class="filter-group">
+            <label for="studentFilterYear">Year</label>
+            <select id="studentFilterYear" class="input-control">
+              <option value="ALL">All Years</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label for="studentFilterDept">Department</label>
+            <select id="studentFilterDept" class="input-control">
+              <option value="ALL">All Departments</option>
+            </select>
+          </div>
+
+          <div class="filter-action-group">
+            <button class="btn btn-primary" id="applyStudentFiltersBtn" type="button">Apply Filters</button>
+            <button class="btn btn-secondary" id="clearStudentFiltersBtn" type="button">Clear</button>
           </div>
         </div>
 
@@ -592,110 +647,10 @@
           <button class="search-clear" id="clearStudentSearchBtn" type="button" aria-label="Clear search">×</button>
         </div>
 
-        <!-- Student filter controls: Team, Dept Name, Dept Category, Year -->
-        <div class="filter-bar" style="align-items: flex-end; margin-bottom: 0.75rem;">
-          <div class="filter-group">
-            <label style="font-size: 0.8rem; color: var(--text-muted);">Team:</label>
-            <select id="studentFilterTeam" class="input-control" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
-              <option value="ALL">All Teams</option>
-              <option>Incharge</option>
-              <option>Music</option>
-              <option>Theatre</option>
-              <option>Dance</option>
-              <option>Music folk</option>
-              <option>Video editing & photography</option>
-              <option>Silabham</option>
-              <option>FACE PAINTING</option>
-              <option>FIRE LESS COOKING</option>
-              <option>DRAWING</option>
-              <option>speech and essay writting</option>
-              <option>Corporate work</option>
-              <option>Fashion walk</option>
-            </select>
-          </div>
-
-          <div class="filter-group">
-            <label style="font-size: 0.8rem; color: var(--text-muted);">Dept Name:</label>
-            <select id="studentFilterDeptName" class="input-control" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
-              <option value="ALL">All Department Names</option>
-              <option>Computer Science</option>
-              <option>Commerce</option>
-              <option>Mathematics</option>
-              <option>ENGLISH</option>
-              <option>ARABIC</option>
-              <option>BOTANY</option>
-              <option>CHEMISTRY</option>
-              <option>ECONOMICS</option>
-              <option>HISTORY</option>
-              <option>PHYSICS</option>
-              <option>TAMIL</option>
-              <option>ZOOLOGY</option>
-              <option>AI&ML</option>
-              <option>BBA-AVI</option>
-              <option>BBA</option>
-              <option>BCA</option>
-              <option>BIOTECH</option>
-              <option>HOTEL MANAGEMENT</option>
-              <option>IT&CS</option>
-              <option>INTERNATIONAL & FINANCE</option>
-              <option>VISCOM</option>
-              <option>B.com IF</option>
-            </select>
-          </div>
-
-          <div class="filter-group">
-            <label style="font-size: 0.8rem; color: var(--text-muted);">Dept Category:</label>
-            <select id="studentFilterDept" class="input-control" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
-              <option value="ALL">All (Aided & Self-Finance)</option>
-              <option value="Aided">Aided</option>
-              <option value="Self-Finance">Self-Finance</option>
-            </select>
-          </div>
-
-          <div class="filter-group">
-            <label style="font-size: 0.8rem; color: var(--text-muted);">Year:</label>
-            <select id="studentFilterYear" class="input-control" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
-              <option value="ALL">All Years</option>
-              <option>First Year</option>
-              <option>Second Year</option>
-              <option>Third Year</option>
-            </select>
-          </div>
-
-          <button class="btn btn-primary btn-sm" id="applyStudentFiltersBtn" type="button" style="white-space: nowrap; height: 38px; font-size: 0.8rem;">Apply</button>
-
-          <div id="studentExportColumns" style="display:flex; flex-direction:column; gap:8px; margin-left:0.5rem;">
-            <label style="font-size:0.85rem; font-weight:600; margin-top:6px;">Select Columns to Export:</label>
-            <div style="display:flex; gap:12px; flex-wrap:wrap; max-width:780px; align-items:center;">
-              <label style="margin-right:8px;"><input type="checkbox" id="studentExportColsSelectAll" checked> <strong>Select All</strong></label>
-              <div style="display:flex; gap:12px; flex-wrap:wrap;">
-                <label><input type="checkbox" class="student-export-col-checkbox" data-key="name" checked> Student Name</label>
-                <label><input type="checkbox" class="student-export-col-checkbox" data-key="rollNumber" checked> Roll Number</label>
-                <label><input type="checkbox" class="student-export-col-checkbox" data-key="registerNumber" checked> Register Number</label>
-                <label><input type="checkbox" class="student-export-col-checkbox" data-key="deptName" checked> Department</label>
-                <label><input type="checkbox" class="student-export-col-checkbox" data-key="section" checked> Section</label>
-                <label><input type="checkbox" class="student-export-col-checkbox" data-key="mobile" checked> Mobile</label>
-                <label><input type="checkbox" class="student-export-col-checkbox" data-key="department" checked> Aided / Self-Finance</label>
-                <label><input type="checkbox" class="student-export-col-checkbox" data-key="teamIds" checked> Team</label>
-                <label><input type="checkbox" class="student-export-col-checkbox" data-key="year" checked> Year</label>
-              </div>
-            </div>
-            <label style="font-size:0.8rem; color:var(--text-muted);">Tip: Uncheck columns you don't want to appear in the exported Excel.</label>
-          </div>
-          <!-- Export preview and progress placeholders (used by startStudentExport) -->
-          <div id="exportPreviewContainer" style="display:none; margin-left:0.5rem; margin-top:8px; max-width:900px;"></div>
-          <div id="exportFiltersSummary" style="display:none; margin-left:0.5rem; font-size:0.9rem; color:var(--text-muted);"></div>
-          <div id="studentExportProgress" style="display:none; margin-left:0.5rem; margin-top:8px;">
-            <progress id="studentExportProgressBar" value="0" max="100" style="width:320px; height:14px;"></progress>
-            <div id="studentExportProgressText" style="font-size:0.85rem; color:var(--text-muted); margin-top:6px;"></div>
-          </div>
-        </div>
-
         <div class="table-responsive responsive-cards">
           <table class="data-table">
             <thead>
               <tr>
-                <!-- selection column removed -->
                 <th>Roll No</th>
                 <th>Register No</th>
                 <th>Name</th>
