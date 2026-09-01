@@ -1774,10 +1774,13 @@ async function handleNotificationsClick() {
   modal.querySelector('#notifModalClose').addEventListener('click', () => modal.remove());
   const backBtn = modal.querySelector('#notifModalBack');
   if (backBtn) backBtn.addEventListener('click', () => { try { goBackTab(); } catch (e) {} modal.remove(); });
-  modal.querySelector('#notifModalClear').addEventListener('click', async () => {
-    await clearNotificationsForCurrentUser();
-    modal.remove();
-  });
+  const clearModalBtn = modal.querySelector('#notifModalClear');
+  if (clearModalBtn) {
+    clearModalBtn.addEventListener('click', async () => {
+      await clearNotificationsForCurrentUser();
+      modal.remove();
+    });
+  }
 
   // basic styles for modal (scoped inline to avoid touching CSS files)
   const styleId = 'notifModalStyles';
