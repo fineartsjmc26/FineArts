@@ -58,10 +58,6 @@
       <nav class="sidebar-nav" aria-label="Main navigation">
         <div class="sidebar-section-label">Navigation</div>
         <div class="tab-bar">
-          <button class="tab-btn active" data-tab="dashboardTab" type="button" aria-label="Open dashboard">
-            <span class="nav-icon"><svg data-lucide="layout-dashboard"></svg></span>
-            <span class="nav-label">Dashboard</span>
-          </button>
           <button class="tab-btn" data-tab="markTab" type="button" aria-label="Open attendance page">
             <span class="nav-icon"><svg data-lucide="clipboard-check"></svg></span>
             <span class="nav-label">Attendance</span>
@@ -126,14 +122,6 @@
             <span></span>
           </div>
           <!-- header user controls removed; Settings & Logout moved under sidebar profile -->
-          <div class="theme-control">
-            <label for="themeSelect" class="sr-only">Color theme</label>
-            <select id="themeSelect" aria-label="Color theme" title="Choose theme">
-              <option value="system">System</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </select>
-          </div>
           <button class="icon-btn" id="notifBtn" title="Notifications" aria-label="Notifications">
             <svg data-lucide="bell" width="18" height="18"></svg>
             <span class="notif-dot"></span>
@@ -821,12 +809,25 @@
         <div style="margin-bottom: 1rem;">
           <p class="section-kicker">Management Shortcuts</p>
           <div style="display:flex; flex-wrap:wrap; gap:8px;">
+            <button class="btn btn-secondary" type="button" onclick="switchToTab('dashboardTab')">Dashboard</button>
             <button class="btn btn-secondary admin-only" type="button" onclick="switchToTab('deptsTab')">Departments</button>
             <button class="btn btn-secondary admin-only" type="button" onclick="switchToTab('yearsTab')">Years</button>
             <button class="btn btn-secondary admin-only" type="button" onclick="switchToTab('sectionsTab')">Sections</button>
             <button class="btn btn-secondary admin-only" type="button" onclick="switchToTab('teamsTab')">Teams</button>
             <button class="btn btn-secondary admin-only" type="button" onclick="switchToTab('usersTab')">Manage Users</button>
             <button class="btn btn-secondary admin-only" type="button" onclick="switchToTab('reportsTab')">Reports</button>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+          <p class="section-kicker">Appearance</p>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <label for="themeSelect" style="min-width:110px; margin:0;">Color theme</label>
+            <select id="themeSelect" aria-label="Color theme" title="Choose theme">
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
           </div>
         </div>
 
