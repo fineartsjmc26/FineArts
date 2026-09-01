@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: attendance-sync
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lock-sync-service
+  namespace: attendance-sync
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lock-sync-service
+  template:
+    metadata:
+      labels:
+        app: lock-sync-service
+    spec:
+      containers:
+        - name: lock-sync-service
+          image: lock-sync-service:latest
+          env:
+            - name: FIREBASE_SERVICE_ACCOUNT_PATH
+              value: /secrets/serviceAccount.json
+            - name: OBSERVE_ONLY
+              value: "true"
+          volumeMounts:
+            - name: service-account
+              mountPath: /secrets
+              readOnly: true
+      volumes:
+        - name: service-account
+          secret:
+            secretName: firebase-service-account
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: firebase-service-account
+  namespace: attendance-sync
+type: Opaque
+data: {}

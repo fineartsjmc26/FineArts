@@ -1,0 +1,13 @@
+{
+  "name": "lock-sync-service",
+  "version": "0.1.0",
+  "description": "Background service to synchronize attendance lock states across clients",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^11.10.0",
+    "winston": "^3.9.0"
+  }
+}

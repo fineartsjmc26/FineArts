@@ -1,0 +1,21 @@
+version: '3.8'
+services:
+  access-gateway:
+    build: ./access_gateway
+    image: access-gateway:local
+    ports:
+      - "4000:4000"
+    environment:
+      - UPSTREAM_URL=http://host.docker.internal:3000
+      - PORT=4000
+    restart: unless-stopped
+
+  lock-sync-service:
+    build: ./tools/lock_sync_service
+    image: lock-sync-service:local
+    environment:
+      - FIREBASE_SERVICE_ACCOUNT_PATH=/secrets/serviceAccount.json
+      - OBSERVE_ONLY=true
+    volumes:
+      - ./secrets/serviceAccount.json:/secrets/serviceAccount.json:ro
+    restart: unless-stopped

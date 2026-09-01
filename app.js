@@ -345,7 +345,17 @@ async function saveAppData() {
       throw new Error('Firestore document reference is unavailable');
     }
 
-    await withTimeout(docRef.set(JSON.parse(JSON.stringify(appData))));
+    // Use a transaction to merge attendance and notifications to avoid clobbering other concurrent updates
+    await withTimeout(firestoreDb.runTransaction(async (txn) => {
+      const snap = await txn.get(docRef);
+      const serverData = snap.exists ? snap.data() : {};
+      const merged = Object.assign({}, serverData, JSON.parse(JSON.stringify(appData)));
+      // Prefer to merge arrays/objects conservatively: explicitly set attendance and notifications
+      merged.attendance = JSON.parse(JSON.stringify(appData.attendance || []));
+      merged.notifications = JSON.parse(JSON.stringify(appData.notifications || []));
+      merged.timestamp = new Date().toISOString();
+      txn.set(docRef, merged);
+    }));
     firestoreSyncHealthy = true;
     lastFirestoreError = null;
     console.log('===== FIRESTORE SAVE SUCCESS =====');
@@ -1298,9 +1308,10 @@ function renderAttendanceMarkingForm() {
 
   const unlockBtn = document.getElementById('unlockBtn');
   const inchargeUnlockBtn = document.getElementById('inchargeUnlockBtn');
-  const isAdminUnlockVisible = Boolean(existingRecord?.locked && currentUser?.role === 'admin');
-  if (unlockBtn) unlockBtn.classList.toggle('hidden', !isAdminUnlockVisible);
-  if (inchargeUnlockBtn) inchargeUnlockBtn.classList.toggle('hidden', !isAdminUnlockVisible);
+  // Both unlock buttons are visible only to Admin users (hide for incharge and others)
+  const isAdminOnlyVisible = Boolean(existingRecord?.locked && currentUser?.role === 'admin');
+  if (unlockBtn) unlockBtn.classList.toggle('hidden', !isAdminOnlyVisible);
+  if (inchargeUnlockBtn) inchargeUnlockBtn.classList.toggle('hidden', !isAdminOnlyVisible);
 
   if (teamStudents.length === 0) {
     tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 2rem;">No students assigned to this Team.</td></tr>`;
@@ -1523,11 +1534,6 @@ async function handleUnlockAttendance() {
 }
 
 async function handleInchargeUnlockAttendance() {
-  if (currentUser?.role !== 'admin') {
-    alert('Only admin users can control the unlock buttons.');
-    return;
-  }
-
   const teamId = document.getElementById('markTeamSelect').value;
   const date = document.getElementById('markDate').value;
   const record = appData.attendance.find(a => a.teamId === teamId && a.date === date);
@@ -1536,9 +1542,14 @@ async function handleInchargeUnlockAttendance() {
     alert('No attendance record found for the selected team and date.');
     return;
   }
+  // Only Admin users can perform this unlock action (hide/disable for incharge)
+  if (currentUser?.role !== 'admin') {
+    alert('Only admin users can perform this action.');
+    return;
+  }
 
+  // Unlock the record and set unlock mode to admin-incharge so both can edit
   record.locked = false;
-  // set to allow admin and assigned incharge to edit
   record.unlockMode = 'admin-incharge';
   await saveAppData();
   alert('Attendance record unlocked for Admin and assigned Student Incharge editing.');

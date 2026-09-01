@@ -1,0 +1,28 @@
+name: Access Gateway CI
+
+on:
+  push:
+    paths:
+      - 'access_gateway/**'
+  pull_request:
+    paths:
+      - 'access_gateway/**'
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install dependencies
+        working-directory: access_gateway
+        run: npm ci
+      - name: Run tests
+        working-directory: access_gateway
+        run: npm test
+      - name: Build Docker image
+        working-directory: access_gateway
+        run: docker build -t access-gateway:ci .
