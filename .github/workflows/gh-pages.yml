@@ -42,7 +42,7 @@ jobs:
           user_name: "github-actions[bot]"
           user_email: "github-actions[bot]@users.noreply.github.com"
 
-      - name: Create .nojekyll so files starting with underscore are served
+      - name: Trigger GitHub Pages build
         if: always()
         run: |
           gh api repos/${{ github.repository }}/pages/builds -X POST -f 'source=gh-pages' || true
