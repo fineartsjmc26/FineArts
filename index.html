@@ -802,9 +802,12 @@
     <section id="settingsTab" class="tab-content hidden">
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
-          <div>
-            <h2>Settings</h2>
-            <p style="color: var(--text-muted); font-size: 0.85rem;">Control synchronization, cache behavior, and the current session state.</p>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="btn btn-secondary" onclick="goBackTab()">← Back</button>
+            <div>
+              <h2>Settings</h2>
+              <p style="color: var(--text-muted); font-size: 0.85rem;">Control synchronization, cache behavior, and the current session state.</p>
+            </div>
           </div>
           <span class="soft-pill" id="settingsConnectionBadge">Online sync active</span>
         </div>

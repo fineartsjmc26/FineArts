@@ -597,13 +597,16 @@ function initUIEvents() {
     renderStudentsTable();
   });
   document.getElementById('applyStudentFiltersBtn').addEventListener('click', renderStudentsTable);
-  document.getElementById('clearStudentFiltersBtn').addEventListener('click', () => {
-    const y = document.getElementById('studentFilterYear');
-    const d = document.getElementById('studentFilterDept');
-    if (y) y.value = 'ALL';
-    if (d) d.value = 'ALL';
-    renderStudentsTable();
-  });
+  const clearStudentFiltersBtn = document.getElementById('clearStudentFiltersBtn');
+  if (clearStudentFiltersBtn) {
+    clearStudentFiltersBtn.addEventListener('click', () => {
+      const y = document.getElementById('studentFilterYear');
+      const d = document.getElementById('studentFilterDept');
+      if (y) y.value = 'ALL';
+      if (d) d.value = 'ALL';
+      renderStudentsTable();
+    });
+  }
   
 
   document.getElementById('openAddStudentModalBtn').addEventListener('click', () => openStudentModal());
