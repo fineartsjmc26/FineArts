@@ -1715,7 +1715,6 @@ async function handleNotificationsClick() {
     <div class="notes-panel">
       <div class="notes-header"><strong>Notifications</strong><div style="display:flex; gap:8px; align-items:center;"><button id="notifModalBack" class="btn btn-secondary btn-sm">Back</button><button id="notifModalClose" class="btn-close">×</button></div></div>
       <div class="notes-list"></div>
-      <div style="text-align:right; margin-top:8px;"><button id="notifModalClear" class="btn btn-secondary btn-sm">Clear Visible</button></div>
     </div>
   `;
 
@@ -1777,13 +1776,6 @@ async function handleNotificationsClick() {
   modal.querySelector('#notifModalClose').addEventListener('click', () => modal.remove());
   const backBtn = modal.querySelector('#notifModalBack');
   if (backBtn) backBtn.addEventListener('click', () => { try { goBackTab(); } catch (e) {} modal.remove(); });
-  const clearModalBtn = modal.querySelector('#notifModalClear');
-  if (clearModalBtn) {
-    clearModalBtn.addEventListener('click', async () => {
-      await clearNotificationsForCurrentUser();
-      modal.remove();
-    });
-  }
 
   // basic styles for modal (scoped inline to avoid touching CSS files)
   const styleId = 'notifModalStyles';
