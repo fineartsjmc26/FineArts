@@ -24,15 +24,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Debug runner environment
-        run: |
-          echo "GITHUB_REPOSITORY=$GITHUB_REPOSITORY"
-          echo "GITHUB_ACTOR=$GITHUB_ACTOR"
-          echo "GITHUB_WORKFLOW=$GITHUB_WORKFLOW"
-          echo "GITHUB_REF=$GITHUB_REF"
-          echo "Listing workspace files:"
-          ls -la
-
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
