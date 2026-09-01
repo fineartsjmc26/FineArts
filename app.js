@@ -85,6 +85,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (storedUser) {
     try {
       currentUser = JSON.parse(storedUser);
+      // normalize role to lowercase to avoid case-sensitivity bugs in role checks
+      if (currentUser && currentUser.role) currentUser.role = String(currentUser.role).toLowerCase();
       showDashboard();
     } catch (error) {
       console.warn('Stored session is invalid, clearing it.', error.message);
@@ -394,8 +396,10 @@ function initAuth() {
 
     const user = appData.users.find(u => u.username === username && u.password === password);
     if (user) {
-      currentUser = user;
-      sessionStorage.setItem('attendance_session_user', JSON.stringify(user));
+      // normalize role on the session user to avoid case-sensitivity issues
+      const normalized = Object.assign({}, user, { role: String(user.role || '').toLowerCase() });
+      currentUser = normalized;
+      sessionStorage.setItem('attendance_session_user', JSON.stringify(normalized));
       showDashboard();
     } else {
       alert('Invalid Username or Password! Please try again.');
@@ -1290,10 +1294,39 @@ function renderAttendanceMarkingForm() {
   const saveAttendanceBtn = document.getElementById('saveAttendanceBtn');
   const batchActionBtns = document.getElementById('batchActionBtns');
 
-  if (isLocked) {
-    markLockBanner.classList.remove('hidden');
+  // Show the team-wise lock banner whenever a record exists and is locked.
+  if (existingRecord?.locked) {
+    // prefer showing the notification message for this team/date when present
+    const lockNotif = (Array.isArray(appData.notifications) ? appData.notifications : []).find(n => (n.type === 'team-locked' || n.type === 'incharge-marked-attendance' || n.type === 'team-attendance-complete') && n.teamId === teamId && n.date === date);
+    // markLockBanner may be a DOM element or a test stub object without querySelector/classList. Handle both safely.
+    let span = null;
+    if (markLockBanner) {
+      if (typeof markLockBanner.querySelector === 'function') {
+        span = markLockBanner.querySelector('span');
+      } else {
+        // create a thin wrapper that reads/writes markLockBanner.innerHTML for test environments
+        span = {
+          set innerHTML(v) { try { markLockBanner.innerHTML = v; } catch (e) { /* ignore */ } },
+          get innerHTML() { return markLockBanner.innerHTML; }
+        };
+      }
+    }
+
+    if (lockNotif && lockNotif.message) {
+      if (span) span.innerHTML = lockNotif.message;
+    } else {
+      if (span) span.innerHTML = `<svg data-lucide="lock"></svg> <strong>Student Attendance Locked:</strong> Students already marked for this date cannot be marked again in another team.`;
+    }
+
+    if (markLockBanner) {
+      if (markLockBanner.classList && typeof markLockBanner.classList.remove === 'function') markLockBanner.classList.remove('hidden');
+      else markLockBanner.hidden = false;
+    }
   } else {
-    markLockBanner.classList.add('hidden');
+    if (markLockBanner) {
+      if (markLockBanner.classList && typeof markLockBanner.classList.add === 'function') markLockBanner.classList.add('hidden');
+      else markLockBanner.hidden = true;
+    }
   }
 
   if (isLocked) {
@@ -1456,8 +1489,9 @@ async function handleSaveAttendance() {
     // lock the record on save to prevent further changes unless unlocked by Admin
     locked: true,
     teamLocked: true,
-    // default unlock mode requires Admin to unlock; Admin can later set 'admin-incharge' via button
-    unlockMode: 'admin',
+    // default unlock mode: fully locked until an Admin explicitly unlocks
+    // this prevents Admins from editing immediately without using the unlock action
+    unlockMode: 'locked',
     timestamp: new Date().toISOString()
   };
 
@@ -1469,6 +1503,20 @@ async function handleSaveAttendance() {
       teamId,
       date,
       message: `Attendance entered for ${teamId} by ${markingInchargeName} on ${date}. Team attendance is now complete.`,
+      read: false,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  // Always add a team-locked notification when the record is locked (visible to all users)
+  if (newRecord.locked) {
+    appData.notifications = Array.isArray(appData.notifications) ? appData.notifications : [];
+    appData.notifications.unshift({
+      id: 'notification_' + Date.now() + '_locked',
+      type: 'team-locked',
+      teamId,
+      date,
+      message: `Attendance for ${teamId} on ${date} was locked by ${markingInchargeName}.`,
       read: false,
       timestamp: new Date().toISOString()
     });
@@ -1557,19 +1605,33 @@ async function handleInchargeUnlockAttendance() {
   renderRecordsTable();
 }
 
+// Expose critical handlers to the global scope for event binding and tests
+try {
+  globalThis.handleUnlockAttendance = typeof handleUnlockAttendance === 'function' ? handleUnlockAttendance : undefined;
+  globalThis.handleInchargeUnlockAttendance = typeof handleInchargeUnlockAttendance === 'function' ? handleInchargeUnlockAttendance : undefined;
+} catch (e) {
+  console.warn('Could not expose unlock handlers globally', e && e.message);
+}
+
 function getVisibleNotificationsForCurrentUser() {
   if (!currentUser) return [];
 
   const allNotifications = Array.isArray(appData.notifications) ? appData.notifications : [];
+  // Always show team-locked notifications to all users
+  const visible = allNotifications.filter(n => n.type === 'team-locked');
+
   if (currentUser.role === 'admin') {
-    return allNotifications.filter(n => n.type === 'team-attendance-complete' || n.type === 'incharge-marked-attendance');
+    // Admins also see team-attendance-complete and incharge-marked-attendance
+    return visible.concat(allNotifications.filter(n => n.type === 'team-attendance-complete' || n.type === 'incharge-marked-attendance'));
   }
 
   if (currentUser.role === 'incharge') {
-    return allNotifications.filter(n => (n.type && n.type.startsWith('incharge')) && (n.senderId === currentUser.id || n.type === 'incharge-attendance-saved'));
+    // Incharges see team-locked and their incharge notifications
+    return visible.concat(allNotifications.filter(n => (n.type && n.type.startsWith('incharge')) && (n.senderId === currentUser.id || n.type === 'incharge-attendance-saved')));
   }
 
-  return [];
+  // Other users (students/guests) see only team-locked notifications
+  return visible;
 }
 
 async function clearNotificationsForCurrentUser() {
@@ -1603,27 +1665,31 @@ function showPushNotification(message, type = 'info', durationMs = 4200) {
   }, durationMs);
 }
 
+// Show a special push-down lock notification for Admin users with action buttons
+// push-lock rendering removed — lock notifications are shown inside the team banner only.
+
+// Render a global banner (similar to markLockBanner) for admins with unlock actions
+// global banner rendering removed — use team-local banner instead.
+
 function renderNotifications() {
   const notificationDot = document.querySelector('#notifBtn .notif-dot');
   const clearBtn = document.getElementById('notifClearBtn');
   if (!notificationDot) return;
 
+  const visibleNotifications = getVisibleNotificationsForCurrentUser();
   let unreadCount = 0;
-  if (currentUser?.role === 'admin') {
-    unreadCount = (appData.notifications || []).filter(notification => !isNotificationReadByUser(notification, currentUser.id)).length;
-  } else if (currentUser?.role === 'incharge') {
-    unreadCount = (appData.notifications || []).filter(notification => !isNotificationReadByUser(notification, currentUser.id) && (
-      (notification.type && notification.type.startsWith('incharge')) || notification.senderId === currentUser.id
-    )).length;
+  if (Array.isArray(visibleNotifications) && visibleNotifications.length) {
+    unreadCount = visibleNotifications.filter(notification => !isNotificationReadByUser(notification, currentUser?.id)).length;
   }
 
   notificationDot.classList.toggle('hidden', unreadCount === 0);
   notificationDot.setAttribute('aria-label', unreadCount ? `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}` : 'No unread notifications');
 
   if (clearBtn) {
-    const visibleNotifications = getVisibleNotificationsForCurrentUser();
     clearBtn.classList.toggle('hidden', visibleNotifications.length === 0);
   }
+
+  // Lock notifications are shown inside the team marking banner; do not render global push/banners here.
 }
 
 async function handleNotificationsClick() {
@@ -1634,12 +1700,102 @@ async function handleNotificationsClick() {
     return;
   }
 
-  alert(notifications.slice(0, 10).map(notification => notification.message).join('\n'));
+  // Build a lightweight modal to show notifications with action buttons for admins
+  const existing = document.getElementById('notifModal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'notifModal';
+  modal.className = 'notes-modal';
+  modal.innerHTML = `
+    <div class="notes-backdrop"></div>
+    <div class="notes-panel">
+      <div class="notes-header"><strong>Notifications</strong><div style="display:flex; gap:8px; align-items:center;"><button id="notifModalBack" class="btn btn-secondary btn-sm">Back</button><button id="notifModalClose" class="btn-close">×</button></div></div>
+      <div class="notes-list"></div>
+      <div style="text-align:right; margin-top:8px;"><button id="notifModalClear" class="btn btn-secondary btn-sm">Clear Visible</button></div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  const list = modal.querySelector('.notes-list');
+
   const unreadNotifications = notifications.filter(notification => !isNotificationReadByUser(notification, currentUser.id));
+
+  notifications.slice(0, 50).forEach(n => {
+    const row = document.createElement('div');
+    row.className = 'note-row';
+    const msg = document.createElement('div');
+    msg.className = 'note-msg';
+    msg.textContent = n.message || '';
+    row.appendChild(msg);
+
+    const actions = document.createElement('div');
+    actions.className = 'note-actions';
+
+    // If this notification refers to a locked team attendance, show Admin action buttons for admins
+    if (n.type === 'team-locked' || n.type === 'incharge-marked-attendance' || n.type === 'team-attendance-complete') {
+      const teamId = n.teamId;
+      const date = n.date;
+
+      // Unlock actions moved to the team-wise lock banner inside the Mark Attendance tab.
+      // Provide a quick shortcut for admins to open the Mark Attendance view for this team/date.
+      if (String(currentUser?.role || '').toLowerCase() === 'admin') {
+        const openMarkBtn = document.createElement('button');
+        openMarkBtn.className = 'btn btn-secondary btn-sm';
+        openMarkBtn.textContent = 'Open Mark Attendance';
+        openMarkBtn.addEventListener('click', () => {
+          switchToTab('markTab');
+          const teamSelect = document.getElementById('markTeamSelect');
+          const dateInput = document.getElementById('markDate');
+          if (teamSelect) teamSelect.value = teamId || teamSelect.value;
+          if (dateInput) dateInput.value = date || dateInput.value;
+          renderAttendanceMarkingForm();
+          modal.remove();
+        });
+        actions.appendChild(openMarkBtn);
+      }
+    }
+
+    // small timestamp / mark as read indicator
+    const meta = document.createElement('div');
+    meta.className = 'note-meta';
+    meta.textContent = new Date(n.timestamp || Date.now()).toLocaleString();
+    row.appendChild(actions);
+    row.appendChild(meta);
+
+    list.appendChild(row);
+  });
+
+  // mark unread as read and persist
   unreadNotifications.forEach(notification => { markNotificationReadByUser(notification, currentUser.id); });
-  if (unreadNotifications.length > 0) {
-    await saveAppData();
-    renderNotifications();
+  if (unreadNotifications.length > 0) await saveAppData();
+  renderNotifications();
+
+  modal.querySelector('#notifModalClose').addEventListener('click', () => modal.remove());
+  const backBtn = modal.querySelector('#notifModalBack');
+  if (backBtn) backBtn.addEventListener('click', () => { try { goBackTab(); } catch (e) {} modal.remove(); });
+  modal.querySelector('#notifModalClear').addEventListener('click', async () => {
+    await clearNotificationsForCurrentUser();
+    modal.remove();
+  });
+
+  // basic styles for modal (scoped inline to avoid touching CSS files)
+  const styleId = 'notifModalStyles';
+  if (!document.getElementById(styleId)) {
+    const s = document.createElement('style');
+    s.id = styleId;
+    s.textContent = `
+      .notes-modal { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; }
+      .notes-backdrop { position: absolute; inset:0; background: rgba(0,0,0,0.45); }
+      .notes-panel { position: relative; background: #fff; border-radius:8px; padding:12px; width: min(760px, 95%); max-height: 80vh; overflow:auto; box-shadow:0 8px 24px rgba(0,0,0,0.2); }
+      .notes-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+      .btn-close { background:transparent; border:none; font-size:1.25rem; cursor:pointer; }
+      .note-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #f2f2f2; }
+      .note-msg { flex:1; margin-right:12px; color:#222; }
+      .note-actions { white-space:nowrap; }
+      .note-meta { color:#666; font-size:0.8rem; margin-left:12px; }
+    `;
+    document.head.appendChild(s);
   }
 }
 
@@ -2408,3 +2564,22 @@ async function removeUser(userId) {
 function closeModal(modalId) {
   document.getElementById(modalId).classList.add('hidden');
 }
+
+// Late-binding: ensure critical unlock handlers are attached after all functions load.
+(function bindLateHandlers() {
+  try {
+    const unlockBtn = document.getElementById('unlockBtn');
+    if (unlockBtn && typeof handleUnlockAttendance === 'function') {
+      try { unlockBtn.removeEventListener('click', handleUnlockAttendance); } catch (e) {}
+      unlockBtn.addEventListener('click', handleUnlockAttendance);
+    }
+
+    const inchargeUnlockBtn = document.getElementById('inchargeUnlockBtn');
+    if (inchargeUnlockBtn && typeof handleInchargeUnlockAttendance === 'function') {
+      try { inchargeUnlockBtn.removeEventListener('click', handleInchargeUnlockAttendance); } catch (e) {}
+      inchargeUnlockBtn.addEventListener('click', handleInchargeUnlockAttendance);
+    }
+  } catch (err) {
+    console.warn('Late handler bind failed', err && err.message);
+  }
+})();

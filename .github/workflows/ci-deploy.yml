@@ -1,0 +1,121 @@
+name: CI / Build & Push Docker Images
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'access_gateway/**'
+      - 'tools/lock_sync_service/**'
+      - 'package.json'
+      - 'app.js'
+  pull_request:
+    paths:
+      - 'access_gateway/**'
+      - 'tools/lock_sync_service/**'
+
+env:
+  IMAGE_NAMESPACE: ${{ secrets.IMAGE_NAMESPACE }}
+  ACCESS_GATEWAY_IMAGE: ${{ secrets.IMAGE_NAMESPACE }}/access-gateway
+  LOCK_SYNC_IMAGE: ${{ secrets.IMAGE_NAMESPACE }}/lock-sync-service
+
+jobs:
+  test-and-build:
+    name: Run tests, build & push images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            **/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies and run tests
+        working-directory: ./
+        run: |
+          npm ci --prefer-offline --no-audit --progress=false
+          npm test
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to container registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ secrets.REGISTRY_URL }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and push Access Gateway image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./access_gateway
+          file: ./access_gateway/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ secrets.REGISTRY_URL }}/${{ env.ACCESS_GATEWAY_IMAGE }}:${{ github.sha }}
+            ${{ secrets.REGISTRY_URL }}/${{ env.ACCESS_GATEWAY_IMAGE }}:latest
+
+      - name: Build and push Lock Sync Service image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./tools/lock_sync_service
+          file: ./tools/lock_sync_service/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ secrets.REGISTRY_URL }}/${{ env.LOCK_SYNC_IMAGE }}:${{ github.sha }}
+            ${{ secrets.REGISTRY_URL }}/${{ env.LOCK_SYNC_IMAGE }}:latest
+
+  deploy-to-k8s:
+    name: Deploy to Kubernetes (optional)
+    runs-on: ubuntu-latest
+    needs: test-and-build
+    if: ${{ secrets.KUBE_CONFIG_DATA != '' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBE_CONFIG_DATA }}" | base64 --decode > $HOME/.kube/config
+
+      - name: Replace image placeholders in manifests
+        run: |
+          sed -i "s|IMAGE_ACCESS_GATEWAY|${{ secrets.REGISTRY_URL }}/${{ env.ACCESS_GATEWAY_IMAGE }}:${{ github.sha }}|g" access_gateway/k8s-deployment.yaml
+          sed -i "s|IMAGE_LOCK_SYNC|${{ secrets.REGISTRY_URL }}/${{ env.LOCK_SYNC_IMAGE }}:${{ github.sha }}|g" tools/lock_sync_service/k8s-deployment.yaml
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f access_gateway/k8s-deployment.yaml
+          kubectl apply -f tools/lock_sync_service/k8s-deployment.yaml
+
+
+# Notes:
+# - Set these repository secrets in Settings → Secrets → Actions:
+#   - REGISTRY_URL (e.g. ghcr.io or your registry host)
+#   - REGISTRY_USERNAME
+#   - REGISTRY_PASSWORD (or token)
+#   - IMAGE_NAMESPACE (e.g. your-org/your-repo-prefix)
+#   - (Optional) KUBE_CONFIG_DATA (base64-encoded kubeconfig) for automatic k8s deploy
+# - The workflow runs tests (npm test) and builds/pushes two images when changes are made in the specified paths.
+# - The Kubernetes deploy job runs only when KUBE_CONFIG_DATA is provided as a secret.
