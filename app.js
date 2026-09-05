@@ -1179,7 +1179,16 @@ function getStudentDateLockInfo(studentId, date, currentTeamId = null) {
 
 function canCurrentUserEditStudentAttendance(studentId, date, teamId) {
   const lockInfo = getStudentDateLockInfo(studentId, date, teamId);
-  if (!lockInfo.exists || lockInfo.record?.locked === false) return true;
+  if (!lockInfo.exists) return true;
+  if (lockInfo.record?.locked === false) return true;
+
+  if (lockInfo.isLockedByOtherTeam) {
+    if (currentUser?.role === 'admin') return true;
+    if (currentUser?.role === 'incharge') {
+      return canUnlockAttendanceForUser(lockInfo.lockedByTeamId, currentUser.role, currentUser) && (lockInfo.record?.unlockMode === 'student-unlock' || lockInfo.record?.unlockMode === 'admin');
+    }
+    return false;
+  }
 
   return currentUser?.role === 'admin';
 }
