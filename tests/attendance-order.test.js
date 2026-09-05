@@ -127,6 +127,16 @@ try {
   assert.strictEqual(isStudentMarkedInAnotherTeam('s1', '2024-02-14', 'Team Alpha'), true);
   assert.strictEqual(isStudentMarkedInAnotherTeam('s1', '2024-01-11', 'Team Beta'), false);
 
+  const crossTeamLock = getStudentDateLockInfo('s1', '2024-01-10', 'Team Beta');
+  assert.strictEqual(crossTeamLock.exists, true);
+  assert.strictEqual(crossTeamLock.isLockedByOtherTeam, true);
+
+  global.currentUser = { id: 'u3', username: 'otherteamincharge', role: 'incharge', name: 'Other Team Incharge', assignedTeamIds: ['Team Beta'] };
+  assert.strictEqual(canCurrentUserEditStudentAttendance('s1', '2024-01-10', 'Team Beta'), false);
+
+  global.currentUser = { id: 'u1', username: 'admin', role: 'admin', name: 'Admin' };
+  assert.strictEqual(canCurrentUserEditStudentAttendance('s1', '2024-01-10', 'Team Beta'), false);
+
   global.currentUser = { id: 'u2', username: 'incharge1', role: 'incharge', name: 'Student Incharge 1', assignedTeamIds: ['Team Alpha'] };
   global.saveAppData = async () => {};
   global.renderNotifications = () => {};

@@ -111,6 +111,7 @@ body {
     linear-gradient(135deg, #F6F8FC 0%, #F8FAFC 48%, #F6F8FC 100%);
   color: var(--text);
   min-height: 100vh;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   transition: background 0.25s var(--ease), color 0.25s var(--ease);
 }
@@ -1671,33 +1672,43 @@ button[data-tab="settingsTab"] .nav-label,
   .hero-card { grid-template-columns: 1fr; }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 768px) {
+  .app-shell {
+    position: relative;
+    display: block;
+  }
+
   .sidebar {
     position: fixed;
     left: 0;
     top: 0;
+    height: 100vh;
     transform: translateX(-100%);
     box-shadow: var(--shadow-lg);
+    z-index: 230;
   }
+
   .app-shell.sidebar-mobile-open .sidebar { transform: translateX(0); }
   .app-shell.sidebar-collapsed .sidebar {
     width: var(--sidebar-w);
+    transform: translateX(0);
   }
+
   .app-shell.sidebar-collapsed .brand-text,
   .app-shell.sidebar-collapsed .nav-label,
   .app-shell.sidebar-collapsed .sidebar-section-label,
   .app-shell.sidebar-collapsed .nav-active-dot {
     display: block;
   }
+
   .app-shell.sidebar-collapsed .tab-btn {
     justify-content: flex-start;
   }
+
   .mobile-menu-btn { display: flex; }
   .sidebar-collapse-btn { display: none; }
   .user-badge .user-badge-meta { display: none; }
-}
-
-@media (max-width: 768px) {
+  .main-col { width: 100%; }
   .container { padding: 1rem 1rem 2.5rem; }
   .card { padding: 1.15rem; border-radius: var(--radius); }
   .header { padding: 0 1rem; }
@@ -1706,6 +1717,17 @@ button[data-tab="settingsTab"] .nav-label,
   .section-heading { flex-direction: column; }
   .floating-action { display: inline-flex; }
   .section-actions { display: none; }
+  .hero-card {
+    grid-template-columns: 1fr;
+    padding: 1.15rem;
+  }
+  .hero-actions { flex-direction: column; }
+  .hero-actions .btn { width: 100%; }
+  .dashboard-grid { grid-template-columns: 1fr; }
+  .dashboard-grid.secondary-grid { grid-template-columns: 1fr; }
+  .header-brand { max-width: calc(100% - 72px); }
+  .header-welcome { font-size: 1rem; }
+  .profile-menu { right: -12px; }
 }
 
 @media (max-width: 480px) {
@@ -1719,6 +1741,8 @@ button[data-tab="settingsTab"] .nav-label,
   .hero-ring { width: 160px; height: 160px; }
   .hero-ring-alt { width: 120px; height: 120px; }
   .lock-banner { align-items: flex-start; }
+
+  .mobile-menu-btn { display: flex; }
 
   .container,
   .section-shell,

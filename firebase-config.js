@@ -9,8 +9,26 @@ const firebaseConfig = {
   appId: "1:533898504157:web:7aee88373c8c68da7e3834"
 };
 
-// Initialize Firebase
+window.firebaseConfig = firebaseConfig;
+
+const firebaseConfigIsUsable = Boolean(
+  firebaseConfig &&
+  firebaseConfig.apiKey &&
+  firebaseConfig.projectId &&
+  firebaseConfig.appId &&
+  firebaseConfig.authDomain
+);
+
+// Initialize Firebase only when the config is complete.
 if (typeof firebase !== 'undefined') {
-  firebase.initializeApp(firebaseConfig);
-  console.log('🔥 Firebase initialized for project', firebaseConfig.projectId, 'authDomain', firebaseConfig.authDomain);
+  if (!firebaseConfigIsUsable) {
+    console.warn('Firebase config is incomplete. Local-only attendance mode will continue without Firestore sync.');
+  } else if (!firebase.apps || firebase.apps.length === 0) {
+    firebase.initializeApp(firebaseConfig);
+    console.log('🔥 Firebase initialized for project', firebaseConfig.projectId, 'authDomain', firebaseConfig.authDomain);
+  } else {
+    console.log('🔥 Firebase already initialized for project', firebaseConfig.projectId);
+  }
+} else {
+  console.warn('Firebase SDK is unavailable. Local-only attendance mode will continue without remote sync.');
 }

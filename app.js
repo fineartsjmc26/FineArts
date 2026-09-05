@@ -3,8 +3,10 @@
 // Application State
 const defaultAppData = {
   users: [
+    { id: "1234", username: "1234", password: "098", role: "admin", name: "System Administrator" },
     { id: "u1", username: "admin", password: "admin123", role: "admin", name: "System Administrator" },
-    { id: "u2", username: "incharge1", password: "user123", role: "incharge", name: "Student Incharge 1", assignedTeamIds: ["Team Alpha"] }
+    { id: "u2", username: "incharge1", password: "user123", role: "incharge", name: "Student Incharge 1", assignedTeamIds: ["Team Alpha"] },
+    { id: "i1", username: "incharge", password: "incharge123", role: "incharge", name: "Student Incharge", assignedTeamIds: ["Team Alpha"] }
   ],
   departments: ["Computer Science", "Information Technology", "Electronics & Comm", "Commerce", "Mathematics"],
   departments: ["Computer Science","Commerce","Mathematics","ENGLISH","ARABIC","BOTANY","CHEMISTRY","ECONOMICS","HISTORY","PHYSICS","TAMIL","ZOOLOGY","AI&ML","BBA-AVI","BBA","BCA","BIOTECH","HOTEL MANAGEMENT","IT&CS","INTERNATIONAL & FINANCE","VISCOM","B.com IF"],
@@ -24,6 +26,7 @@ const defaultAppData = {
 let appData = JSON.parse(JSON.stringify(defaultAppData));
 let currentUser = null;
 let currentTabId = 'dashboardTab';
+let sharedSyncChannel = null;
 // selected IDs for export
 globalThis.selectedExportStudents = new Set();
 globalThis.selectedExportRecords = new Set();
@@ -45,6 +48,124 @@ let firestoreSyncHealthy = false;
 let lastFirestoreError = null;
 const API_TIMEOUT_MS = 8000;
 const OFFLINE_MODE_KEY = 'attendance_app_force_offline';
+const LOCAL_APP_DATA_KEY = 'attendance_app_data';
+
+function unsubscribeFirestoreListener() {
+  if (firestoreListenerUnsubscribe) {
+    try {
+      firestoreListenerUnsubscribe();
+    } catch (error) {
+      console.warn('Failed to unsubscribe Firestore listener:', error?.message || error);
+    }
+  }
+  firestoreListenerUnsubscribe = null;
+  firestoreListenerRegistered = false;
+}
+
+function applyFirestoreSnapshot(snapshotValue, { initialLoad = false } = {}) {
+  if (!snapshotValue || typeof snapshotValue !== 'object') return false;
+
+  const nextAppData = getMergedAppData(snapshotValue);
+  if (!Array.isArray(nextAppData.students) || !Array.isArray(nextAppData.attendance)) {
+    return false;
+  }
+
+  if (Array.isArray(window.AttendanceLockState?.hydrateAttendanceLocks)) {
+    nextAppData.attendance = window.AttendanceLockState.hydrateAttendanceLocks(nextAppData.attendance);
+  }
+
+  appData = nextAppData;
+  firestoreSyncHealthy = true;
+  lastFirestoreError = null;
+
+  if (initialLoad) {
+    console.log('Data loaded successfully from Firestore', {
+      source: 'firestore',
+      count: {
+        users: appData.users.length,
+        students: appData.students.length,
+        attendance: appData.attendance.length,
+      },
+    });
+  } else {
+    console.log('Firestore sync update received', {
+      users: appData.users.length,
+      students: appData.students.length,
+      attendance: appData.attendance.length,
+    });
+  }
+
+  if (currentUser && !appData.users.some(user => user.id === currentUser.id)) {
+    alert('Your user account was deleted by an administrator. You will now be logged out.');
+    logoutCurrentUser();
+    return true;
+  }
+
+  if (currentUser) renderAllViews();
+  return true;
+}
+
+function initSharedLocalSync() {
+  if (window.__attendanceSharedSyncInitialized) return;
+  window.__attendanceSharedSyncInitialized = true;
+
+  if ('BroadcastChannel' in window) {
+    sharedSyncChannel = new BroadcastChannel('attendance_app_shared_sync');
+    sharedSyncChannel.onmessage = (event) => {
+      const snapshot = event?.data?.snapshot;
+      if (snapshot) {
+        applyLocalSyncSnapshot(snapshot);
+      }
+    };
+  }
+}
+
+function persistLocalAppDataBackup() {
+  try {
+    const snapshot = JSON.parse(JSON.stringify(appData));
+    localStorage.setItem(LOCAL_APP_DATA_KEY, JSON.stringify(snapshot));
+
+    if (sharedSyncChannel) {
+      sharedSyncChannel.postMessage({ snapshot });
+    }
+
+    const syncEvent = new CustomEvent('attendance-local-sync', { detail: snapshot });
+    window.dispatchEvent(syncEvent);
+  } catch (error) {
+    console.warn('Unable to persist local app data backup:', error?.message || error);
+  }
+}
+
+function restoreLocalAppDataBackup() {
+  try {
+    const storedData = localStorage.getItem(LOCAL_APP_DATA_KEY);
+    if (!storedData) return null;
+    const parsed = JSON.parse(storedData);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return getMergedAppData(parsed);
+  } catch (error) {
+    console.warn('Unable to restore local app data backup:', error?.message || error);
+    return null;
+  }
+}
+
+function applyLocalSyncSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return;
+  if (firestoreDb && firestoreSyncHealthy) return;
+
+  const merged = getMergedAppData(snapshot);
+  const previousUserId = currentUser?.id || null;
+  appData = merged;
+
+  if (currentUser && !appData.users.some(user => user.id === previousUserId)) {
+    currentUser = null;
+    sessionStorage.removeItem('attendance_session_user');
+  }
+
+  if (currentUser) {
+    renderAllViews();
+  }
+}
 
 function withTimeout(promise, timeoutMs = API_TIMEOUT_MS) {
   return Promise.race([
@@ -72,6 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.__attendanceAppInitialized = true;
 
   initFirebase();
+  initSharedLocalSync();
 
   document.querySelectorAll('form').forEach(form => {
     form.addEventListener('submit', (event) => {
@@ -100,6 +222,42 @@ document.addEventListener('DOMContentLoaded', () => {
   initUIVisibilityGuard();
   initPasswordToggles();
 
+  window.addEventListener('storage', (event) => {
+    if (event.key === LOCAL_APP_DATA_KEY && event.newValue) {
+      try {
+        const incoming = JSON.parse(event.newValue);
+        applyLocalSyncSnapshot(incoming);
+      } catch (error) {
+        console.warn('Failed to apply storage sync update:', error?.message || error);
+      }
+    }
+
+    if (event.key === 'attendance_lock_state_v1' && event.newValue) {
+      try {
+        const lockState = JSON.parse(event.newValue);
+        if (lockState && lockState.records && Array.isArray(appData.attendance)) {
+          appData.attendance = window.AttendanceLockState?.hydrateAttendanceLocks ? window.AttendanceLockState.hydrateAttendanceLocks(appData.attendance) : appData.attendance;
+          renderAllViews();
+        }
+      } catch (error) {
+        console.warn('Failed to apply lock sync update:', error?.message || error);
+      }
+    }
+  });
+
+  window.addEventListener('attendance-local-sync', (event) => {
+    const incoming = event?.detail;
+    if (!incoming) return;
+    applyLocalSyncSnapshot(incoming);
+  });
+
+  window.addEventListener('attendance-lock-sync', (event) => {
+    const lockState = event?.detail;
+    if (!lockState || !lockState.records || !Array.isArray(appData.attendance)) return;
+    appData.attendance = window.AttendanceLockState?.hydrateAttendanceLocks ? window.AttendanceLockState.hydrateAttendanceLocks(appData.attendance) : appData.attendance;
+    renderAllViews();
+  });
+
   loadAppData().then(() => {
     if (currentUser) {
       renderAllViews();
@@ -120,9 +278,40 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+function stripLockMetadataFromRecord(record) {
+  if (!record || typeof record !== 'object') return record;
+  const clone = { ...record };
+  delete clone.locked;
+  delete clone.teamLocked;
+  delete clone.unlockMode;
+  delete clone.lockedByTeamId;
+  delete clone.lockedByTeamName;
+  return clone;
+}
+
+function ensureBuiltInAdminUser(users = []) {
+  const cleanedUsers = Array.isArray(users) ? users.filter(Boolean) : [];
+  const hasBuiltInAdmin = cleanedUsers.some(user =>
+    user && (user.username === 'admin' || user.id === 'u1') && (user.password === 'admin123' || user.role === 'admin')
+  );
+
+  if (!hasBuiltInAdmin) {
+    return [{
+      id: 'u1',
+      username: 'admin',
+      password: 'admin123',
+      role: 'admin',
+      name: 'System Administrator'
+    }, ...cleanedUsers];
+  }
+
+  return cleanedUsers;
+}
+
 function getMergedAppData(source) {
+  const baseUsers = Array.isArray(defaultAppData.users) && defaultAppData.users.length ? defaultAppData.users : [];
   const merged = {
-    users: Array.isArray(source?.users) && source.users.length ? source.users : defaultAppData.users,
+    users: Array.isArray(source?.users) && source.users.length ? source.users : baseUsers,
     departments: Array.isArray(source?.departments) && source.departments.length ? source.departments : defaultAppData.departments,
     years: Array.isArray(source?.years) && source.years.length ? source.years : defaultAppData.years,
     sections: Array.isArray(source?.sections) && source.sections.length ? source.sections : defaultAppData.sections,
@@ -132,8 +321,20 @@ function getMergedAppData(source) {
     notifications: Array.isArray(source?.notifications) ? source.notifications : defaultAppData.notifications,
   };
 
+  merged.users = ensureBuiltInAdminUser(merged.users);
+
+  const sanitized = { ...defaultAppData, ...merged, ...source };
+  if (sanitized.attendance) {
+    sanitized.attendance = Array.isArray(sanitized.attendance) ? sanitized.attendance.filter(Boolean).map(record => ({
+      ...record,
+      locked: Boolean(record.locked),
+      teamLocked: Boolean(record.teamLocked),
+      unlockMode: record.unlockMode || 'student-unlock'
+    })) : [];
+  }
+
   // preserve any extra properties without losing defaults
-  return { ...defaultAppData, ...merged, ...source };
+  return sanitized;
 }
 
 function getAttendanceKey(record) {
@@ -193,24 +394,47 @@ function initFirebase() {
   if (window.__attendanceFirebaseInitialized) return;
   window.__attendanceFirebaseInitialized = true;
 
+  const runtimeConfig = globalThis.firebaseConfig || (typeof firebase !== 'undefined' && firebase.app ? firebase.app().options : null);
+  const configIsUsable = Boolean(runtimeConfig && runtimeConfig.apiKey && runtimeConfig.projectId && runtimeConfig.appId && runtimeConfig.authDomain);
+
   if (typeof firebase === 'undefined' || !firebase.apps || firebase.apps.length === 0) {
     console.warn('Firebase SDK is not available. Firestore data sync is disabled.');
     return;
   }
 
+  if (!configIsUsable) {
+    console.warn('Firebase config is incomplete. Firestore sync is disabled until the project configuration is valid.');
+    return;
+  }
+
   try {
+    if (!firebase.apps || firebase.apps.length === 0) {
+      firebase.initializeApp(runtimeConfig);
+    }
+
     firestoreDb = typeof firebase.firestore === 'function' ? firebase.firestore() : null;
 
-    if (firestoreDb && typeof firestoreDb.enablePersistence === 'function') {
+    if (firebase.auth && typeof firebase.auth === 'function') {
+      const auth = firebase.auth();
+      if (auth && typeof auth.currentUser === 'object' && auth.currentUser) {
+        firestoreSyncHealthy = true;
+      } else {
+        firestoreSyncHealthy = false;
+        console.info('Firestore sync remains offline until a real Firebase-authenticated session is available.');
+      }
+    }
+
+    if (firestoreDb && typeof firestoreDb.enablePersistence === 'function' && firebase.auth && typeof firebase.auth === 'function' && firebase.auth().currentUser) {
       firestoreDb.enablePersistence({ synchronizeTabs: true }).catch(() => {
         console.warn('Firestore persistence could not be enabled in this browser session.');
       });
     }
 
-    if (firestoreDb) {
+    if (firestoreDb && firebase.auth && typeof firebase.auth === 'function' && firebase.auth().currentUser) {
       registerFirestoreListener();
     }
   } catch (e) {
+    firestoreSyncHealthy = false;
     console.warn('Firebase initialization error:', e.message);
   }
 }
@@ -295,26 +519,19 @@ async function exportToWord(rows, selectedCols, headers, filename, filtersText) 
 }
 
 async function registerFirestoreListener() {
-  if (firestoreListenerRegistered || !firestoreDb) return;
+  if (!firestoreDb) return;
 
   try {
     const docRef = getFirestoreDocRef();
     if (!docRef) return;
 
+    unsubscribeFirestoreListener();
+
     firestoreListenerRegistered = true;
     firestoreListenerUnsubscribe = docRef.onSnapshot((doc) => {
       const val = doc.data();
       if (val && (val.users || val.students || val.attendance || val.departments || val.sections || val.teams)) {
-        appData = getMergedAppData(val);
-        firestoreSyncHealthy = true;
-        lastFirestoreError = null;
-        console.log('Firestore sync update received', { users: appData.users.length, students: appData.students.length, attendance: appData.attendance.length });
-        if (currentUser && !appData.users.some(user => user.id === currentUser.id)) {
-          alert('Your user account was deleted by an administrator. You will now be logged out.');
-          logoutCurrentUser();
-          return;
-        }
-        if (currentUser) renderAllViews();
+        applyFirestoreSnapshot(val, { initialLoad: false });
       }
     }, (error) => {
       firestoreSyncHealthy = false;
@@ -330,26 +547,39 @@ async function registerFirestoreListener() {
 async function loadAppData() {
   const isOnline = typeof navigator !== 'undefined' && navigator.onLine !== false;
   const offlineForced = localStorage.getItem(OFFLINE_MODE_KEY) === 'true';
+  const canUseRemoteFirestore = Boolean(
+    firestoreDb &&
+    firebase &&
+    typeof firebase.auth === 'function' &&
+    firebase.auth().currentUser &&
+    isOnline &&
+    !offlineForced
+  );
 
-  if (firestoreDb && isOnline && !offlineForced) {
+  if (canUseRemoteFirestore) {
     try {
       const docRef = getFirestoreDocRef();
       const snapshot = await withTimeout(docRef.get());
       const val = snapshot.data();
       if (val && (val.users || val.students || val.attendance || val.departments || val.sections || val.teams)) {
-        appData = getMergedAppData(val);
+        const merged = getMergedAppData(val);
+        appData = merged;
+        appData.attendance = Array.isArray(window.AttendanceLockState?.hydrateAttendanceLocks)
+          ? window.AttendanceLockState.hydrateAttendanceLocks(appData.attendance)
+          : appData.attendance;
         firestoreSyncHealthy = true;
         lastFirestoreError = null;
-        console.log('Data loaded successfully from Firestore', { source: 'firestore', count: { users: appData.users.length, students: appData.students.length, attendance: appData.attendance.length } });
+        persistLocalAppDataBackup();
         return;
       }
 
       if (!snapshot.exists) {
-        await withTimeout(docRef.set(JSON.parse(JSON.stringify(defaultAppData))));
+        await withTimeout(docRef.set(JSON.parse(JSON.stringify(defaultAppData)), { merge: true }));
         console.log('Created Firestore document attendance_master_data/appData with default app data');
         appData = JSON.parse(JSON.stringify(defaultAppData));
         firestoreSyncHealthy = true;
         lastFirestoreError = null;
+        persistLocalAppDataBackup();
         return;
       }
 
@@ -362,13 +592,19 @@ async function loadAppData() {
     }
   }
 
+  const localFallback = restoreLocalAppDataBackup();
+  if (localFallback) {
+    appData = localFallback;
+    console.log('Loaded fallback data from localStorage', { users: appData.users.length, students: appData.students.length, attendance: appData.attendance.length });
+    return;
+  }
+
+  appData = JSON.parse(JSON.stringify(defaultAppData));
+  persistLocalAppDataBackup();
+  console.log('Initialized shared local app data seed for all sessions.');
+
   if (!isOnline || offlineForced) {
-    const local = localStorage.getItem('attendance_app_data');
-    if (local) {
-      const localData = JSON.parse(local);
-      appData = getMergedAppData(localData);
-      console.log('Loaded fallback data from localStorage', { users: appData.users.length, students: appData.students.length, attendance: appData.attendance.length });
-    }
+    console.warn('No local app data backup was available. Using default app seed data.');
   }
 }
 
@@ -377,11 +613,20 @@ async function saveAppData() {
   // Firestore is the primary source of truth for entered attendance data.
   // Do not persist the main attendance records into localStorage; keep it as a fallback only.
   const projectId = (typeof firebase !== 'undefined' && firebase?.app?.()) ? firebase.app().options?.projectId || 'unknown' : 'unknown';
-  const remoteSyncEnabled = localStorage.getItem(OFFLINE_MODE_KEY) !== 'true' && (typeof navigator === 'undefined' || navigator.onLine !== false);
+  const remoteSyncEnabled = Boolean(
+    localStorage.getItem(OFFLINE_MODE_KEY) !== 'true' &&
+    (typeof navigator === 'undefined' || navigator.onLine !== false) &&
+    firestoreDb &&
+    firebase &&
+    typeof firebase.auth === 'function' &&
+    firebase.auth().currentUser
+  );
 
   console.log('===== FIRESTORE SAVE START =====');
   console.log('Project:', projectId);
   console.log('Document: attendance_master_data/appData');
+
+  persistLocalAppDataBackup();
 
   if (!remoteSyncEnabled || !firestoreDb) {
     if (!remoteSyncEnabled) console.log('Remote sync disabled, skipping Firestore save.');
@@ -394,15 +639,24 @@ async function saveAppData() {
       throw new Error('Firestore document reference is unavailable');
     }
 
-    // Use a transaction to merge attendance and notifications to avoid clobbering other concurrent updates
+    const sanitizedAppData = JSON.parse(JSON.stringify(appData));
+    if (Array.isArray(sanitizedAppData.attendance)) {
+      sanitizedAppData.attendance = sanitizedAppData.attendance.map((record) => {
+        if (!record || !record.teamId || !record.date) return record;
+        return stripLockMetadataFromRecord(record);
+      });
+    }
+
+    // Use a transaction to merge attendance and notifications to avoid clobbering other concurrent updates.
+    // Lock metadata is intentionally not stored in Firestore; it lives in the dedicated local lock-state file.
     await withTimeout(firestoreDb.runTransaction(async (txn) => {
       const snap = await txn.get(docRef);
       const serverData = snap.exists ? snap.data() : {};
-      const merged = Object.assign({}, serverData, JSON.parse(JSON.stringify(appData)));
-      merged.attendance = mergeAttendanceRecords(serverData.attendance || [], appData.attendance || []);
-      merged.notifications = mergeNotifications(serverData.notifications || [], appData.notifications || []);
+      const merged = Object.assign({}, serverData, JSON.parse(JSON.stringify(sanitizedAppData)));
+      merged.attendance = mergeAttendanceRecords(serverData.attendance || [], sanitizedAppData.attendance || []);
+      merged.notifications = mergeNotifications(serverData.notifications || [], sanitizedAppData.notifications || []);
       merged.timestamp = new Date().toISOString();
-      txn.set(docRef, merged);
+      txn.set(docRef, merged, { merge: true });
     }));
     firestoreSyncHealthy = true;
     lastFirestoreError = null;
@@ -465,6 +719,7 @@ function initAuth() {
 }
 
 function logoutCurrentUser() {
+  unsubscribeFirestoreListener();
   currentUser = null;
   sessionStorage.removeItem('attendance_session_user');
   document.getElementById('appHeader')?.classList.add('hidden');
@@ -1189,7 +1444,22 @@ function getStudentDateLockInfo(studentId, date, currentTeamId = null) {
     .filter(record => record && record.date === date && record.studentAttendanceMap && Object.prototype.hasOwnProperty.call(record.studentAttendanceMap, studentId));
 
   if (!matchingRecords.length) {
-    return { exists: false, record: null, isLocked: false, isCurrentTeam: false, isLockedByOtherTeam: false, lockedByTeamId: null, lockedByTeamName: 'Unknown Team', markedBy: 'Unknown' };
+    const lockState = window.AttendanceLockState?.getStudentAttendanceLockState?.(studentId, date);
+    if (!lockState) {
+      return { exists: false, record: null, isLocked: false, isCurrentTeam: false, isLockedByOtherTeam: false, lockedByTeamId: null, lockedByTeamName: 'Unknown Team', markedBy: 'Unknown' };
+    }
+
+    return {
+      exists: true,
+      record: null,
+      isLocked: Boolean(lockState.locked !== false),
+      isCurrentTeam: false,
+      isLockedByOtherTeam: Boolean(currentTeamId) && Boolean(lockState.teamId) && lockState.teamId !== currentTeamId,
+      lockedByTeamId: lockState.teamId || null,
+      lockedByTeamName: lockState.teamName || 'Unknown Team',
+      markedBy: lockState.markedBy || 'Unknown',
+      unlockMode: lockState.unlockMode || 'student-unlock'
+    };
   }
 
   const sorted = [...matchingRecords].sort((a, b) => {
@@ -1207,9 +1477,10 @@ function getStudentDateLockInfo(studentId, date, currentTeamId = null) {
   const teamId = record.teamId || null;
   const teamName = record.teamName || getTeamDisplayName(teamId) || 'Unknown Team';
   const markedBy = record.markedBy || 'Unknown';
-  const isLocked = record.locked !== false;
+  const lockState = window.AttendanceLockState?.getStudentAttendanceLockState?.(studentId, date);
+  const isLocked = Boolean(lockState ? lockState.locked !== false : record.locked !== false);
   const isCurrentTeam = Boolean(currentTeamId) && teamId === currentTeamId;
-  const isLockedByOtherTeam = isLocked && Boolean(currentTeamId) && Boolean(otherTeamRecord);
+  const isLockedByOtherTeam = isLocked && Boolean(currentTeamId) && Boolean(otherTeamRecord) && teamId !== currentTeamId;
 
   return {
     exists: true,
@@ -1217,26 +1488,31 @@ function getStudentDateLockInfo(studentId, date, currentTeamId = null) {
     isLocked,
     isCurrentTeam,
     isLockedByOtherTeam,
-    lockedByTeamId: teamId,
-    lockedByTeamName: teamName,
-    markedBy,
+    lockedByTeamId: lockState?.teamId || teamId,
+    lockedByTeamName: lockState?.teamName || teamName || 'Unknown Team',
+    markedBy: lockState?.markedBy || markedBy || 'Unknown',
+    unlockMode: lockState?.unlockMode || record.unlockMode || 'student-unlock'
   };
 }
 
 function canCurrentUserEditStudentAttendance(studentId, date, teamId) {
   const lockInfo = getStudentDateLockInfo(studentId, date, teamId);
   if (!lockInfo.exists) return true;
-  if (lockInfo.record?.locked === false) return true;
 
-  if (lockInfo.isLockedByOtherTeam) {
+  const lockState = window.AttendanceLockState?.getStudentAttendanceLockState?.(studentId, date);
+  if (lockState && lockState.locked === false) {
     if (currentUser?.role === 'admin') return true;
-    if (currentUser?.role === 'incharge') {
-      return canUnlockAttendanceForUser(lockInfo.lockedByTeamId, currentUser.role, currentUser) && (lockInfo.record?.unlockMode === 'student-unlock' || lockInfo.record?.unlockMode === 'admin');
-    }
+    if (currentUser?.role === 'incharge') return lockState.unlockMode === 'student-unlock';
     return false;
   }
 
-  return currentUser?.role === 'admin';
+  if (lockInfo.isLockedByOtherTeam || lockInfo.isLocked) {
+    if (currentUser?.role === 'admin') return false;
+    if (currentUser?.role === 'incharge') return false;
+    return false;
+  }
+
+  return true;
 }
 
 function canEditAttendanceRecord(record, teamId) {
@@ -1490,7 +1766,7 @@ function renderAttendanceMarkingForm() {
     const lockInfo = getStudentDateLockInfo(student.id, date, teamId);
     return lockInfo.exists && lockInfo.isLocked && lockInfo.lockedByTeamId && lockInfo.lockedByTeamId !== teamId;
   });
-  const isLocked = Boolean(existingRecord?.locked && !canEdit);
+  const isLocked = Boolean(existingRecord && !canEdit);
 
   const markLockBanner = document.getElementById('markLockBanner');
   const saveAttendanceBtn = document.getElementById('saveAttendanceBtn');
@@ -1550,12 +1826,12 @@ function renderAttendanceMarkingForm() {
 
   const unlockBtn = document.getElementById('unlockBtn');
   const inchargeUnlockBtn = document.getElementById('inchargeUnlockBtn');
-  const isAdminVisible = Boolean(existingRecord?.locked && currentUser?.role === 'admin');
-  const isStudentUnlockVisible = Boolean(
-    existingRecord?.locked &&
-    currentUser?.role === 'admin' &&
-    canMarkTeam(teamId)
-  );
+  const hasLockedStudentInCurrentSelection = teamStudents.some(student => {
+    const lockInfo = getStudentDateLockInfo(student.id, date, teamId);
+    return lockInfo.exists && lockInfo.isLocked;
+  });
+  const isAdminVisible = Boolean(currentUser?.role === 'admin' && hasLockedStudentInCurrentSelection);
+  const isStudentUnlockVisible = Boolean(currentUser?.role === 'admin' && hasLockedStudentInCurrentSelection && canMarkTeam(teamId));
   if (unlockBtn) unlockBtn.classList.toggle('hidden', !isAdminVisible);
   if (inchargeUnlockBtn) inchargeUnlockBtn.classList.toggle('hidden', !isStudentUnlockVisible);
 
@@ -1579,13 +1855,18 @@ function renderAttendanceMarkingForm() {
       h1 = rec.h1 || 'P'; h2 = rec.h2 || 'P'; h3 = rec.h3 || 'P'; h4 = rec.h4 || 'P'; h5 = rec.h5 || 'P';
     }
 
+    const existingValues = (studentLockInfo.record && studentLockInfo.record.studentAttendanceMap && studentLockInfo.record.studentAttendanceMap[s.id]) || null;
+    const otherTeamValues = otherRecord && otherRecord.studentAttendanceMap && otherRecord.studentAttendanceMap[s.id] ? otherRecord.studentAttendanceMap[s.id] : null;
+    const summaryValues = existingValues ? ['H1', 'H2', 'H3', 'H4', 'H5'].map(label => `${label}=${existingValues[label.toLowerCase()] || 'A'}`).join(' • ') : '';
+    const otherTeamSummary = otherTeamValues ? ['H1', 'H2', 'H3', 'H4', 'H5'].map(label => `${label}=${otherTeamValues[label.toLowerCase()] || 'A'}`).join(' • ') : '';
+
     const lockNote = studentLockInfo.exists && studentLockInfo.isLocked
-      ? `<div class="attendance-lock-note ${studentLockInfo.isCurrentTeam ? 'attendance-lock-current' : 'attendance-lock-other'}"><div class="attendance-lock-title">${studentLockInfo.isCurrentTeam ? 'Attendance marked' : 'Attendance locked'}</div><div class="attendance-lock-subtitle">Marked by ${studentLockInfo.lockedByTeamName || 'Unknown Team'}</div></div>`
+      ? `<div class="attendance-lock-note ${studentLockInfo.isCurrentTeam ? 'attendance-lock-current' : 'attendance-lock-other'}"><div class="attendance-lock-title">${studentLockInfo.isCurrentTeam ? 'Attendance marked' : 'Attendance locked'}</div><div class="attendance-lock-subtitle">${studentLockInfo.isCurrentTeam ? 'Marked by' : 'Marked in Other Team:'} ${studentLockInfo.lockedByTeamName || 'Unknown Team'}</div></div>`
       : '';
 
     const markedFrom = '';
     const categoryMeta = studentLockInfo.exists && studentLockInfo.lockedByTeamName
-      ? `<div style="margin-top:4px; font-size:0.68rem; font-weight:600; color:var(--text-muted, #64748b); text-align:right; overflow-wrap:anywhere; word-break:break-word;">Marked by Team: ${studentLockInfo.lockedByTeamName}</div>`
+      ? `<div style="margin-top:4px; font-size:0.68rem; font-weight:600; color:var(--text-muted, #64748b); text-align:right; overflow-wrap:anywhere; word-break:break-word;">${studentLockInfo.isCurrentTeam ? 'Marked by Team:' : 'Marked in Other Team:'} ${studentLockInfo.lockedByTeamName}</div>`
       : '';
 
     const tr = document.createElement('tr');
@@ -1789,9 +2070,6 @@ async function handleSaveAttendance() {
     date,
     studentAttendanceMap,
     markedBy: existingTeamRecord?.markedBy || markingInchargeName,
-    locked: true,
-    teamLocked: true,
-    unlockMode: 'student-unlock',
     timestamp: new Date().toISOString()
   };
 
@@ -1808,18 +2086,28 @@ async function handleSaveAttendance() {
     });
   }
 
-  if (newRecord.locked) {
-    appData.notifications = Array.isArray(appData.notifications) ? appData.notifications : [];
-    appData.notifications.unshift({
-      id: 'notification_' + Date.now() + '_locked',
-      type: 'team-locked',
-      teamId,
-      date,
-      message: `Attendance for ${teamId} on ${date} was locked by ${markingInchargeName}.`,
-      read: false,
-      timestamp: new Date().toISOString()
-    });
-  }
+  Object.keys(studentAttendanceMap).forEach(studentId => {
+    if (typeof window !== 'undefined' && window.AttendanceLockState && typeof window.AttendanceLockState.lockStudentAttendance === 'function') {
+      window.AttendanceLockState.lockStudentAttendance(studentId, date, {
+        teamId: teamId,
+        teamName: teamName,
+        markedBy: markingInchargeName,
+        timestamp: new Date().toISOString(),
+        unlockMode: 'student-unlock'
+      });
+    }
+  });
+
+  appData.notifications = Array.isArray(appData.notifications) ? appData.notifications : [];
+  appData.notifications.unshift({
+    id: 'notification_' + Date.now() + '_locked',
+    type: 'team-locked',
+    teamId,
+    date,
+    message: `Attendance for ${teamId} on ${date} was locked by ${markingInchargeName}.`,
+    read: false,
+    timestamp: new Date().toISOString()
+  });
 
   if (currentUser?.role === 'incharge') {
     appData.notifications = Array.isArray(appData.notifications) ? appData.notifications : [];
@@ -1861,22 +2149,31 @@ async function handleUnlockAttendance() {
     alert('Admin permission required.');
     return;
   }
+
   const teamId = document.getElementById('markTeamSelect').value;
   const date = document.getElementById('markDate').value;
+  const candidateStudent = teamId && date
+    ? appData.students.find(student => getStudentTeamIds(student).includes(teamId) && getStudentDateLockInfo(student.id, date, teamId).isLocked)
+    : null;
 
-  const record = appData.attendance.find(a => a.teamId === teamId && a.date === date);
-  if (!record) {
-    alert('No attendance record found for the selected team and date.');
+  if (!candidateStudent) {
+    alert('No locked student found for the selected team and date.');
     return;
   }
 
-  const confirmUnlock = window.confirm('Admin unlock selected.\n\nOnly admin users will be allowed to edit this marked attendance.');
+  const confirmUnlock = window.confirm('Unlock Attendance?\nThis will allow editing of locked attendance.');
   if (!confirmUnlock) return;
 
-  record.locked = false;
-  record.unlockMode = 'admin';
-  await saveAppData();
-  alert('Attendance unlocked for admin editing only.');
+  if (typeof window !== 'undefined' && window.AttendanceLockState && typeof window.AttendanceLockState.unlockStudentAttendance === 'function') {
+    window.AttendanceLockState.unlockStudentAttendance(candidateStudent.id, date, 'admin', {
+      teamId,
+      teamName: getTeamDisplayName(teamId),
+      markedBy: candidateStudent.name || 'Unknown',
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  alert('Attendance unlocked');
   renderAttendanceMarkingForm();
   renderRecordsTable();
 }
@@ -1889,20 +2186,28 @@ async function handleInchargeUnlockAttendance() {
 
   const teamId = document.getElementById('markTeamSelect').value;
   const date = document.getElementById('markDate').value;
-  const record = appData.attendance.find(a => a.teamId === teamId && a.date === date);
+  const candidateStudent = teamId && date
+    ? appData.students.find(student => getStudentTeamIds(student).includes(teamId) && getStudentDateLockInfo(student.id, date, teamId).isLocked)
+    : null;
 
-  if (!record) {
-    alert('No attendance record found for the selected team and date.');
+  if (!candidateStudent) {
+    alert('No locked student found for the selected team and date.');
     return;
   }
 
-  const confirmUnlock = window.confirm('Student unlock selected.\n\nBoth admin and the assigned student incharge can edit this marked attendance.');
+  const confirmUnlock = window.confirm('Unlock Student Attendance?\nThis will allow the selected locked student attendance to be edited.');
   if (!confirmUnlock) return;
 
-  record.locked = false;
-  record.unlockMode = 'student-unlock';
-  await saveAppData();
-  alert('Attendance unlocked for admin and assigned incharge editing.');
+  if (typeof window !== 'undefined' && window.AttendanceLockState && typeof window.AttendanceLockState.unlockStudentAttendance === 'function') {
+    window.AttendanceLockState.unlockStudentAttendance(candidateStudent.id, date, 'student-unlock', {
+      teamId,
+      teamName: getTeamDisplayName(teamId),
+      markedBy: candidateStudent.name || 'Unknown',
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  alert('Student attendance unlocked');
   renderAttendanceMarkingForm();
   renderRecordsTable();
 }
