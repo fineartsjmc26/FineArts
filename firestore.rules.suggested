@@ -1,80 +1,21 @@
-// Suggested Firestore rules for enforcing lock/unlock semantics.
-// IMPORTANT: These rules are conservative and intended for review and staged rollout.
-// They are not applied automatically. Review in staging before deploying to production.
+// Firestore rules for the attendance app.
+// The web app currently writes to the shared attendance_master_data/appData document
+// without Firebase auth, so the document must be writable until the app is migrated
+// to an authenticated security model.
 
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isAdmin() {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
-    }
-
-    function isIncharge() {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "incharge";
-    }
-
-    // Helper: check whether the authenticated incharge is assigned to a given teamId
-    function isAssignedIncharge(teamId) {
-      if (!isIncharge()) return false;
-      let u = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-      return (u.assignedTeamId == teamId) || (u.assignedTeamIds is list && u.assignedTeamIds.hasAny([teamId]));
-    }
-
-    // -------------------------------------------------------------------------
-    // attendance_master_data/appData - suggested checks
-    // -------------------------------------------------------------------------
+    // Main app data document used by the attendance app.
     match /attendance_master_data/{docId} {
-      // Keep reads open
       allow read: if true;
-
-      // Writes: allow if signed-in AND one of:
-      //  - Admin user (full privileges)
-      //  - Incharge user, but only for creating new attendance entries for their assigned teams (conservative)
-      // Additionally, only Admins can unlock already-locked records or change unlockMode.
-      allow write: if isSignedIn() && (
-        isAdmin() || (
-          isIncharge() && request.resource.data.attendance is list && validateInchargeWrite(request.resource.data, resource.data)
-        )
-      );
-
-      // Conservative incharge validation:
-      // - Incharge may add new attendance records for teams they are assigned to.
-      // - Incharge may not modify existing attendance entries (prevents bypassing locks).
-      // Note: This is intentionally conservative; adapt as needed for your workflows.
-      function validateInchargeWrite(newData, oldData) {
-        if (!(oldData is map)) {
-          return newData.attendance.size() > 0 && newData.attendance.every(a -> isAssignedIncharge(a.teamId));
-        }
-
-        let oldAttendance = oldData.attendance;
-        let newAttendance = newData.attendance;
-        return oldAttendance.size() <= newAttendance.size()
-          && oldAttendance.every(oldItem -> newAttendance.where(n -> n.id == oldItem.id).size() == 1 &&
-              newAttendance.where(n -> n.id == oldItem.id)[0] == oldItem)
-          && newAttendance.filter(n -> oldAttendance.where(o -> o.id == n.id).size() == 0).every(n -> isAssignedIncharge(n.teamId));
-      }
+      allow create, update, delete: if true;
     }
 
-    // Other existing collections keep their rules (students, users, reports...) - copy your current rules here
-    // This suggested rules file focuses on protecting the shared `attendance_master_data/appData` document.
+    // Keep the rest of the database locked down by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }
-
-/*
-Notes and rollout guidance:
-- These rules are intentionally conservative: incharges may append new attendance entries only for teams they are assigned to, and may not modify existing entries. Admins retain full control.
-- This prevents incharges from unlocking or editing locked records directly; Admins must use the unlock UI which will update the document as permitted for admins.
-- Staged rollout: apply in staging with OBSERVE_ONLY mode enabled on lock-sync-service and monitor client behavior. If incharges require limited edits to existing entries, we can relax the constraint for specific fields (e.g., allow editing only non-locked fields) but that requires more complex per-entry checks.
-- Testing: after deploying to staging, exercise the following flows:
-  1. Incharge marks attendance (new entry) — should succeed for their assigned team.
-  2. Incharge attempts to edit a locked record — should be rejected by rules.
-  3. Admin unlocks via app UI — admin write should succeed.
-
-If you want, I can apply a more permissive rule set or implement finer-grained per-record checks.
-*/

@@ -329,7 +329,7 @@ async function loadAppData() {
 async function saveAppData() {
   localStorage.setItem('attendance_app_data', JSON.stringify(appData));
 
-  const projectId = firebase?.app?.().options?.projectId || 'unknown';
+  const projectId = (typeof firebase !== 'undefined' && firebase?.app?.()) ? firebase.app().options?.projectId || 'unknown' : 'unknown';
   const remoteSyncEnabled = localStorage.getItem(OFFLINE_MODE_KEY) !== 'true' && (typeof navigator === 'undefined' || navigator.onLine !== false);
 
   console.log('===== FIRESTORE SAVE START =====');
@@ -338,7 +338,7 @@ async function saveAppData() {
 
   if (!remoteSyncEnabled || !firestoreDb) {
     if (!remoteSyncEnabled) console.log('Remote sync disabled, skipping Firestore save.');
-    return;
+    return true;
   }
 
   try {
@@ -362,12 +362,15 @@ async function saveAppData() {
     lastFirestoreError = null;
     console.log('===== FIRESTORE SAVE SUCCESS =====');
     console.log('Saved successfully to Firestore', { collection: 'attendance_master_data', document: 'appData' });
+    return true;
   } catch (error) {
     firestoreSyncHealthy = false;
     lastFirestoreError = error;
-    console.error('===== FIRESTORE SAVE FAILED =====');
-    console.error(error);
-    throw error;
+    console.warn('Cloud sync failed. Student data has been preserved in local storage, and the app will continue in offline-safe mode.', error && error.message ? error.message : error);
+    if (typeof showPushNotification === 'function') {
+      showPushNotification('Cloud sync failed. Your data is saved locally.', 'info', 4500);
+    }
+    return false;
   }
 }
 
@@ -591,6 +594,13 @@ function initUIEvents() {
   document.getElementById('cancelAttendanceExportBtn')?.addEventListener('click', () => closeModal('attendanceExportModal'));
   document.getElementById('closeAttendanceExportModal')?.addEventListener('click', () => closeModal('attendanceExportModal'));
   document.getElementById('startAttendanceExportBtn')?.addEventListener('click', exportToExcel);
+
+  // Prevent clicks inside the modal content from propagating to the backdrop or document
+  const _attendanceModalEl = document.getElementById('attendanceExportModal');
+  if (_attendanceModalEl) {
+    const _mc = _attendanceModalEl.querySelector('.modal-content');
+    if (_mc) _mc.addEventListener('click', (e) => e.stopPropagation());
+  }
   document.getElementById('studentSearchInput').addEventListener('input', renderStudentsTable);
   document.getElementById('clearStudentSearchBtn').addEventListener('click', () => {
     document.getElementById('studentSearchInput').value = '';
@@ -613,8 +623,8 @@ function initUIEvents() {
   const exportStudentsBtn = document.getElementById('exportStudentsBtn');
   if (exportStudentsBtn) exportStudentsBtn.addEventListener('click', openStudentExportModal);
 
-  const exportExcelBtn = document.getElementById('exportExcelBtn');
-  if (exportExcelBtn) exportExcelBtn.addEventListener('click', () => {
+  const exportReportBtn = document.getElementById('exportReportBtn');
+    if (exportReportBtn) exportReportBtn.addEventListener('click', () => {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('attendance-export-requested'));
     }
@@ -1097,10 +1107,10 @@ function markNotificationReadByUser(notification, userId) {
 
 function canUnlockAttendanceForUser(teamId, role = currentUser?.role, user = currentUser) {
   if (!teamId) return false;
-  if (role === 'admin') return true;
-  if (role !== 'incharge') return false;
-  const allowedTeams = getUserTeamIds(user);
-  return allowedTeams.includes(teamId);
+  const effectiveRole = role || user?.role;
+  if (effectiveRole === 'admin') return true;
+  if (effectiveRole === 'incharge') return getUserTeamIds(user).includes(teamId);
+  return false;
 }
 
 function getMarkableTeamIds() {
@@ -1112,21 +1122,77 @@ function canMarkTeam(teamId) {
   return currentUser?.role === 'admin' || (currentUser?.role === 'incharge' && getUserTeamIds(currentUser).includes(teamId));
 }
 
+function getTeamDisplayName(teamId) {
+  if (!teamId) return 'Unknown Team';
+  const directMatch = Array.isArray(appData.teams)
+    ? appData.teams.find(team => team === teamId || (team && team.id === teamId) || (team && team.name === teamId) || (team && team.teamName === teamId))
+    : null;
+
+  if (typeof directMatch === 'string') return directMatch;
+  if (directMatch && typeof directMatch === 'object') {
+    if (directMatch.name) return directMatch.name;
+    if (directMatch.teamName) return directMatch.teamName;
+    if (directMatch.id) return directMatch.id;
+  }
+
+  return String(teamId);
+}
+
+function getStudentDateLockInfo(studentId, date, currentTeamId = null) {
+  const matchingRecords = (Array.isArray(appData.attendance) ? appData.attendance : [])
+    .filter(record => record && record.date === date && record.studentAttendanceMap && Object.prototype.hasOwnProperty.call(record.studentAttendanceMap, studentId));
+
+  if (!matchingRecords.length) {
+    return { exists: false, record: null, isLocked: false, isCurrentTeam: false, isLockedByOtherTeam: false, lockedByTeamId: null, lockedByTeamName: 'Unknown Team', markedBy: 'Unknown' };
+  }
+
+  const sorted = [...matchingRecords].sort((a, b) => {
+    const aTime = a?.timestamp ? Date.parse(a.timestamp) : 0;
+    const bTime = b?.timestamp ? Date.parse(b.timestamp) : 0;
+    if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0;
+    if (Number.isNaN(aTime)) return 1;
+    if (Number.isNaN(bTime)) return -1;
+    return aTime - bTime;
+  });
+
+  const currentTeamRecord = currentTeamId ? sorted.find(record => record && record.teamId === currentTeamId) || null : null;
+  const otherTeamRecord = currentTeamId ? sorted.find(record => record && record.teamId && record.teamId !== currentTeamId) || null : null;
+  const record = otherTeamRecord || currentTeamRecord || sorted[0];
+  const teamId = record.teamId || null;
+  const teamName = record.teamName || getTeamDisplayName(teamId) || 'Unknown Team';
+  const markedBy = record.markedBy || 'Unknown';
+  const isLocked = record.locked !== false;
+  const isCurrentTeam = Boolean(currentTeamId) && teamId === currentTeamId;
+  const isLockedByOtherTeam = isLocked && Boolean(currentTeamId) && Boolean(otherTeamRecord);
+
+  return {
+    exists: true,
+    record,
+    isLocked,
+    isCurrentTeam,
+    isLockedByOtherTeam,
+    lockedByTeamId: teamId,
+    lockedByTeamName: teamName,
+    markedBy,
+  };
+}
+
+function canCurrentUserEditStudentAttendance(studentId, date, teamId) {
+  const lockInfo = getStudentDateLockInfo(studentId, date, teamId);
+  if (!lockInfo.exists || lockInfo.record?.locked === false) return true;
+
+  return currentUser?.role === 'admin';
+}
+
 function canEditAttendanceRecord(record, teamId) {
   if (!canMarkTeam(teamId)) return false;
   if (!record || !record.locked) return true;
-  if (record.unlockMode === 'admin') return currentUser?.role === 'admin';
-  if (record.unlockMode === 'admin-incharge') {
-    return currentUser?.role === 'admin' || (currentUser?.role === 'incharge' && getUserTeamIds(currentUser).includes(teamId));
-  }
-  return false;
+  return currentUser?.role === 'admin';
 }
 
 function isAttendanceRecordUnlocked(record) {
   if (!record || !record.locked) return true;
-  if (record?.unlockMode === 'admin') return currentUser?.role === 'admin';
-  if (record?.unlockMode === 'admin-incharge') return currentUser?.role === 'admin' || (currentUser?.role === 'incharge' && getUserTeamIds(currentUser).includes(record.teamId));
-  return false;
+  return currentUser?.role === 'admin';
 }
 
 function getStudentAttendanceRecord(studentId, teamId, date) {
@@ -1270,6 +1336,81 @@ function sortExportRowsForExcel(rows) {
 
 globalThis.sortStudentsWithDirection = sortStudentsWithDirection;
 
+function applyMobileTeamAttendanceRowStyles(tr) {
+  if (window.innerWidth > 480) return;
+
+  const tbody = tr.parentElement;
+  const table = tbody?.closest('table');
+  const wrapper = table?.closest('.table-responsive');
+  const availableWidth = Math.max(0, Math.min(
+    wrapper ? wrapper.getBoundingClientRect().width : window.innerWidth - 24,
+    window.innerWidth - 24
+  ));
+
+  if (wrapper) {
+    wrapper.style.width = '100%';
+    wrapper.style.maxWidth = '100%';
+    wrapper.style.overflowX = 'hidden';
+  }
+  if (table) {
+    table.style.width = `${availableWidth}px`;
+    table.style.maxWidth = '100%';
+    table.style.tableLayout = 'fixed';
+  }
+  if (tbody) {
+    tbody.style.display = 'block';
+    tbody.style.width = `${availableWidth}px`;
+    tbody.style.maxWidth = '100%';
+  }
+
+  tr.style.display = 'grid';
+  tr.style.gridTemplateColumns = '44px minmax(0, 1fr) repeat(5, minmax(18px, 24px))';
+  tr.style.gap = '4px';
+  tr.style.width = `${availableWidth}px`;
+  tr.style.maxWidth = '100%';
+  tr.style.boxSizing = 'border-box';
+  tr.style.padding = '8px 6px';
+  tr.style.alignItems = 'center';
+
+  Array.from(tr.children).forEach(td => {
+    const label = td.dataset.label;
+    if (['Register No', 'Department', 'Category'].includes(label)) {
+      td.style.display = 'none';
+      return;
+    }
+
+    td.style.display = 'flex';
+    td.style.width = '100%';
+    td.style.minWidth = '0';
+    td.style.padding = '6px 2px';
+    td.style.borderBottom = 'none';
+    td.style.boxSizing = 'border-box';
+    td.style.overflow = 'hidden';
+    td.style.textOverflow = 'ellipsis';
+    td.style.whiteSpace = 'nowrap';
+
+    if (label === 'Student Name') {
+      td.style.whiteSpace = 'normal';
+      td.style.wordBreak = 'break-word';
+      td.style.lineHeight = '1.25';
+      td.style.overflowWrap = 'anywhere';
+    }
+
+    if (label === 'Roll No') {
+      td.style.fontSize = '0.72rem';
+      td.style.justifyContent = 'center';
+      td.style.textAlign = 'center';
+      td.style.paddingLeft = '0';
+      td.style.paddingRight = '0';
+    }
+
+    if (/^H[1-5]$/.test(label)) {
+      td.style.justifyContent = 'center';
+      td.style.padding = '0';
+    }
+  });
+}
+
 function renderAttendanceMarkingForm() {
   const teamId = document.getElementById('markTeamSelect').value;
   const date = document.getElementById('markDate').value;
@@ -1290,24 +1431,27 @@ function renderAttendanceMarkingForm() {
 
   const existingRecord = appData.attendance.find(a => a.teamId === teamId && a.date === date);
   const canEdit = canEditAttendanceRecord(existingRecord, teamId);
-  const canUnlockByIncharge = currentUser?.role === 'admin' || (currentUser?.role === 'incharge' && getUserTeamIds(currentUser).includes(teamId));
-  const isLocked = existingRecord?.locked && !canEdit;
+  const hasCrossTeamLockedStudents = teamStudents.some(student => {
+    const lockInfo = getStudentDateLockInfo(student.id, date, teamId);
+    return lockInfo.exists && lockInfo.isLocked && lockInfo.lockedByTeamId && lockInfo.lockedByTeamId !== teamId;
+  });
+  const isLocked = Boolean(existingRecord?.locked && !canEdit);
 
   const markLockBanner = document.getElementById('markLockBanner');
   const saveAttendanceBtn = document.getElementById('saveAttendanceBtn');
   const batchActionBtns = document.getElementById('batchActionBtns');
 
-  // Show the team-wise lock banner whenever a record exists and is locked.
-  if (existingRecord?.locked) {
-    // prefer showing the notification message for this team/date when present
+  const bannerLockedRecord = existingRecord?.locked ? existingRecord : appData.attendance.find(record =>
+    record && record.date === date && teamStudents.some(student => record.studentAttendanceMap && Object.prototype.hasOwnProperty.call(record.studentAttendanceMap, student.id))
+  );
+
+  if (bannerLockedRecord?.locked || hasCrossTeamLockedStudents) {
     const lockNotif = (Array.isArray(appData.notifications) ? appData.notifications : []).find(n => (n.type === 'team-locked' || n.type === 'incharge-marked-attendance' || n.type === 'team-attendance-complete') && n.teamId === teamId && n.date === date);
-    // markLockBanner may be a DOM element or a test stub object without querySelector/classList. Handle both safely.
     let span = null;
     if (markLockBanner) {
       if (typeof markLockBanner.querySelector === 'function') {
         span = markLockBanner.querySelector('span');
       } else {
-        // create a thin wrapper that reads/writes markLockBanner.innerHTML for test environments
         span = {
           set innerHTML(v) { try { markLockBanner.innerHTML = v; } catch (e) { /* ignore */ } },
           get innerHTML() { return markLockBanner.innerHTML; }
@@ -1317,8 +1461,15 @@ function renderAttendanceMarkingForm() {
 
     if (lockNotif && lockNotif.message) {
       if (span) span.innerHTML = lockNotif.message;
-    } else {
-      if (span) span.innerHTML = `<svg data-lucide="lock"></svg> <strong>Student Attendance Locked:</strong> Students already marked for this date cannot be marked again in another team.`;
+    } else if (hasCrossTeamLockedStudents) {
+      const firstLocked = teamStudents.find(student => {
+        const info = getStudentDateLockInfo(student.id, date, teamId);
+        return info.exists && info.isLocked && info.lockedByTeamId && info.lockedByTeamId !== teamId;
+      });
+      const ownerTeam = firstLocked ? getStudentDateLockInfo(firstLocked.id, date, teamId).lockedByTeamName : 'Unknown Team';
+      if (span) span.innerHTML = `<svg data-lucide="lock"></svg> <strong>Attendance Locked:</strong> Marked by ${ownerTeam}`;
+    } else if (span) {
+      span.innerHTML = `<svg data-lucide="lock"></svg> <strong>Student Attendance Locked:</strong> Students already marked for this date cannot be marked again in another team.`;
     }
 
     if (markLockBanner) {
@@ -1344,10 +1495,17 @@ function renderAttendanceMarkingForm() {
 
   const unlockBtn = document.getElementById('unlockBtn');
   const inchargeUnlockBtn = document.getElementById('inchargeUnlockBtn');
-  // Both unlock buttons are visible only to Admin users (hide for incharge and others)
-  const isAdminOnlyVisible = Boolean(existingRecord?.locked && currentUser?.role === 'admin');
-  if (unlockBtn) unlockBtn.classList.toggle('hidden', !isAdminOnlyVisible);
-  if (inchargeUnlockBtn) inchargeUnlockBtn.classList.toggle('hidden', !isAdminOnlyVisible);
+  const isAdminVisible = Boolean(existingRecord?.locked && currentUser?.role === 'admin');
+  const isStudentUnlockVisible = Boolean(
+    existingRecord?.locked &&
+    (
+      currentUser?.role === 'admin' ||
+      (currentUser?.role === 'incharge' && canUnlockAttendanceForUser(teamId, currentUser.role, currentUser))
+    ) &&
+    canMarkTeam(teamId)
+  );
+  if (unlockBtn) unlockBtn.classList.toggle('hidden', !isAdminVisible);
+  if (inchargeUnlockBtn) inchargeUnlockBtn.classList.toggle('hidden', !isStudentUnlockVisible);
 
   if (teamStudents.length === 0) {
     tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 2rem;">No students assigned to this Team.</td></tr>`;
@@ -1356,42 +1514,112 @@ function renderAttendanceMarkingForm() {
 
   teamStudents.forEach(s => {
     let h1 = 'P', h2 = 'P', h3 = 'P', h4 = 'P', h5 = 'P';
+    const studentLockInfo = getStudentDateLockInfo(s.id, date, teamId);
     const studentRecord = getStudentAttendanceRecord(s.id, teamId, date);
-    // find if this student was marked in another team for the same date
     const otherRecord = appData.attendance.find(a => a.date === date && a.teamId !== teamId && a.studentAttendanceMap?.[s.id]);
-    const isStudentLocked = isStudentLockedInTeam(s.id, existingRecord) || Boolean(otherRecord);
+    const isStudentLocked = !canCurrentUserEditStudentAttendance(s.id, date, teamId) && (studentLockInfo.exists || Boolean(otherRecord));
 
     if (studentRecord) {
       const rec = studentRecord.studentAttendanceMap[s.id];
       h1 = rec.h1 || 'P'; h2 = rec.h2 || 'P'; h3 = rec.h3 || 'P'; h4 = rec.h4 || 'P'; h5 = rec.h5 || 'P';
     } else if (otherRecord) {
-      // show values from the other team and mark as locked
       const rec = otherRecord.studentAttendanceMap[s.id];
       h1 = rec.h1 || 'P'; h2 = rec.h2 || 'P'; h3 = rec.h3 || 'P'; h4 = rec.h4 || 'P'; h5 = rec.h5 || 'P';
     }
 
-    const markedFrom = otherRecord ? ` <small style="color:var(--text-muted)">(Marked in ${otherRecord.teamId})</small>` : '';
+    const lockNote = studentLockInfo.exists && studentLockInfo.isLocked
+      ? `<div class="attendance-lock-note ${studentLockInfo.isCurrentTeam ? 'attendance-lock-current' : 'attendance-lock-other'}"><div class="attendance-lock-title">${studentLockInfo.isCurrentTeam ? 'Attendance marked' : 'Attendance locked'}</div><div class="attendance-lock-subtitle">Marked by ${studentLockInfo.lockedByTeamName || 'Unknown Team'}</div></div>`
+      : '';
+
+    const markedFrom = '';
+    const categoryMeta = studentLockInfo.exists && studentLockInfo.lockedByTeamName
+      ? `<div style="margin-top:4px; font-size:0.68rem; font-weight:600; color:var(--text-muted, #64748b); text-align:right; overflow-wrap:anywhere; word-break:break-word;">Marked by Team: ${studentLockInfo.lockedByTeamName}</div>`
+      : '';
 
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td data-label="Roll No"><strong>${s.rollNumber}</strong></td>
-      <td data-label="Register No">${s.registerNumber}</td>
-      <td data-label="Student Name">${s.name}${markedFrom}</td>
-      <td data-label="Department">${s.deptName || 'Computer Science'}</td>
-      <td data-label="Category"><span class="badge ${s.department === 'Aided' ? 'badge-aided' : 'badge-self'}">${s.department}</span></td>
-      
-      <td data-label="H1" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h1 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="1" aria-label="${h1 === 'P' ? 'Present' : 'Absent'} for hour 1" aria-pressed="${h1 === 'P'}" title="${h1 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h1}</button></td>
-      <td data-label="H2" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h2 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="2" aria-label="${h2 === 'P' ? 'Present' : 'Absent'} for hour 2" aria-pressed="${h2 === 'P'}" title="${h2 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h2}</button></td>
-      <td data-label="H3" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h3 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="3" aria-label="${h3 === 'P' ? 'Present' : 'Absent'} for hour 3" aria-pressed="${h3 === 'P'}" title="${h3 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h3}</button></td>
-      <td data-label="H4" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h4 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="4" aria-label="${h4 === 'P' ? 'Present' : 'Absent'} for hour 4" aria-pressed="${h4 === 'P'}" title="${h4 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h4}</button></td>
-      <td data-label="H5" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h5 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="5" aria-label="${h5 === 'P' ? 'Present' : 'Absent'} for hour 5" aria-pressed="${h5 === 'P'}" title="${h5 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h5}</button></td>
-    `;
+    const rollVal = (s.rollNumber || s.roll || '').toString().trim() || '—';
+    const regVal = (s.registerNumber || s.registerNo || '').toString().trim() || '—';
+    const nameVal = (s.name || s.studentName || '').toString().trim() || '—';
+    const deptNameVal = (s.deptName || s.deptName === '' ? s.deptName : (s.deptName || '')) || '—';
+    const categoryVal = (s.department || '').toString().trim() || '—';
+
+    if (typeof window !== 'undefined' && window.innerWidth <= 480) {
+      tr.innerHTML = `
+        <td colspan="10">
+          <div class="student-card" style="width:100%; max-width:100%; box-sizing:border-box; border-radius:20px; padding:20px 18px; background:var(--card-bg, #fff); border:1px solid var(--border, rgba(148,163,184,0.25)); box-shadow:0 8px 20px rgba(15,23,42,0.08);">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">ROLL NO</div>
+              <div style="font-size:0.95rem; font-weight:700; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${rollVal}</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">REGISTER NO</div>
+              <div style="font-size:0.95rem; font-weight:600; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${regVal}</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">STUDENT NAME</div>
+              <div style="font-size:0.95rem; font-weight:600; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${nameVal}</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">DEPARTMENT</div>
+              <div style="font-size:0.95rem; font-weight:600; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${deptNameVal}</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">CATEGORY</div>
+              <div style="font-size:0.95rem; font-weight:600; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">
+                <span class="badge ${s.department === 'Aided' ? 'badge-aided' : 'badge-self'}">${categoryVal}</span>
+                ${categoryMeta}
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">H1</div>
+              <div style="font-size:0.95rem; font-weight:700; color:var(--text, #0f172a); text-align:right; min-width:0;"><button type="button" class="pa-toggle-btn ${h1 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="1" aria-label="${h1 === 'P' ? 'Present' : 'Absent'} for hour 1" aria-pressed="${h1 === 'P'}" title="${h1 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h1}</button></div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">H2</div>
+              <div style="font-size:0.95rem; font-weight:700; color:var(--text, #0f172a); text-align:right; min-width:0;"><button type="button" class="pa-toggle-btn ${h2 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="2" aria-label="${h2 === 'P' ? 'Present' : 'Absent'} for hour 2" aria-pressed="${h2 === 'P'}" title="${h2 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h2}</button></div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">H3</div>
+              <div style="font-size:0.95rem; font-weight:700; color:var(--text, #0f172a); text-align:right; min-width:0;"><button type="button" class="pa-toggle-btn ${h3 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="3" aria-label="${h3 === 'P' ? 'Present' : 'Absent'} for hour 3" aria-pressed="${h3 === 'P'}" title="${h3 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h3}</button></div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">H4</div>
+              <div style="font-size:0.95rem; font-weight:700; color:var(--text, #0f172a); text-align:right; min-width:0;"><button type="button" class="pa-toggle-btn ${h4 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="4" aria-label="${h4 === 'P' ? 'Present' : 'Absent'} for hour 4" aria-pressed="${h4 === 'P'}" title="${h4 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h4}</button></div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">H5</div>
+              <div style="font-size:0.95rem; font-weight:700; color:var(--text, #0f172a); text-align:right; min-width:0;"><button type="button" class="pa-toggle-btn ${h5 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="5" aria-label="${h5 === 'P' ? 'Present' : 'Absent'} for hour 5" aria-pressed="${h5 === 'P'}" title="${h5 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h5}</button></div>
+            </div>
+          </div>
+        </td>
+      `;
+    } else {
+      tr.innerHTML = `
+        <td data-label="Roll No"><strong>${rollVal}</strong></td>
+        <td data-label="Register No">${regVal}</td>
+        <td data-label="Student Name">${nameVal}${markedFrom}${lockNote ? `<div class="attendance-lock-note attendance-lock-inline">${lockNote}</div>` : ''}</td>
+        <td data-label="Department">${deptNameVal}</td>
+        <td data-label="Category"><span class="badge ${s.department === 'Aided' ? 'badge-aided' : 'badge-self'}">${categoryVal}</span></td>
+        <td data-label="H1" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h1 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="1" aria-label="${h1 === 'P' ? 'Present' : 'Absent'} for hour 1" aria-pressed="${h1 === 'P'}" title="${h1 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h1}</button></td>
+        <td data-label="H2" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h2 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="2" aria-label="${h2 === 'P' ? 'Present' : 'Absent'} for hour 2" aria-pressed="${h2 === 'P'}" title="${h2 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h2}</button></td>
+        <td data-label="H3" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h3 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="3" aria-label="${h3 === 'P' ? 'Present' : 'Absent'} for hour 3" aria-pressed="${h3 === 'P'}" title="${h3 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h3}</button></td>
+        <td data-label="H4" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h4 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="4" aria-label="${h4 === 'P' ? 'Present' : 'Absent'} for hour 4" aria-pressed="${h4 === 'P'}" title="${h4 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h4}</button></td>
+        <td data-label="H5" style="text-align: center;"><button type="button" class="pa-toggle-btn ${h5 === 'P' ? 'present' : 'absent'}" onclick="togglePABtn(this)" data-student="${s.id}" data-hour="5" aria-label="${h5 === 'P' ? 'Present' : 'Absent'} for hour 5" aria-pressed="${h5 === 'P'}" title="${h5 === 'P' ? 'Present' : 'Absent'}" ${(isLocked || isStudentLocked) ? 'disabled' : ''}>${h5}</button></td>
+      `;
+      applyMobileTeamAttendanceRowStyles(tr);
+    }
+
     tbody.appendChild(tr);
   });
 }
 
 function togglePABtn(btn) {
-  if (!canMarkTeam(document.getElementById('markTeamSelect')?.value) || btn.disabled) return;
+  const studentId = btn.dataset.student;
+  const teamId = document.getElementById('markTeamSelect')?.value;
+  const date = document.getElementById('markDate')?.value;
+
+  if (!canMarkTeam(teamId) || btn.disabled || !studentId || !date || !canCurrentUserEditStudentAttendance(studentId, date, teamId)) return;
+
   if (btn.textContent === 'P') {
     btn.textContent = 'A';
     btn.classList.remove('present');
@@ -1412,8 +1640,12 @@ function togglePABtn(btn) {
 function setAll5Hours(val) {
   if (!canMarkTeam(document.getElementById('markTeamSelect')?.value)) return;
 
+  const teamId = document.getElementById('markTeamSelect')?.value;
+  const date = document.getElementById('markDate')?.value;
+
   document.querySelectorAll('#attendanceMarkTbody .pa-toggle-btn').forEach(btn => {
-    if (!btn.disabled) {
+    const studentId = btn.dataset.student;
+    if (!btn.disabled && studentId && date && canCurrentUserEditStudentAttendance(studentId, date, teamId)) {
       btn.textContent = val;
       if (val === 'P') {
         btn.classList.remove('absent'); btn.classList.add('present');
@@ -1451,6 +1683,18 @@ async function handleSaveAttendance() {
     return;
   }
 
+  const blockedStudents = teamStudents.filter(s => {
+    const lockInfo = getStudentDateLockInfo(s.id, date, teamId);
+    return lockInfo.exists && lockInfo.isLockedByOtherTeam && !canCurrentUserEditStudentAttendance(s.id, date, teamId);
+  });
+
+  if (blockedStudents.length) {
+    const studentName = blockedStudents[0].name || blockedStudents[0].studentName || 'This student';
+    const teamName = blockedStudents[0] ? getStudentDateLockInfo(blockedStudents[0].id, date, teamId).lockedByTeamName : 'Unknown Team';
+    alert(`${studentName} is already marked for ${date} by ${teamName}. Attendance is locked.`);
+    return;
+  }
+
   const studentAttendanceMap = {};
   const index = appData.attendance.findIndex(a => a.teamId === teamId && a.date === date);
   const existingTeamRecord = index >= 0 ? appData.attendance[index] : null;
@@ -1460,7 +1704,8 @@ async function handleSaveAttendance() {
   }
 
   teamStudents.forEach(s => {
-    if (isStudentMarkedInAnotherTeam(s.id, date, teamId)) return;
+    const lockInfo = getStudentDateLockInfo(s.id, date, teamId);
+    if (lockInfo.exists && lockInfo.isLockedByOtherTeam && !canCurrentUserEditStudentAttendance(s.id, date, teamId)) return;
 
     const btnH1 = document.querySelector(`.pa-toggle-btn[data-student="${s.id}"][data-hour="1"]`);
     const btnH2 = document.querySelector(`.pa-toggle-btn[data-student="${s.id}"][data-hour="2"]`);
@@ -1482,19 +1727,19 @@ async function handleSaveAttendance() {
     return;
   }
 
-  // When saved by an incharge or admin, lock the team's entered attendance immediately
   const teamIsComplete = isTeamAttendanceComplete(teamId, { studentAttendanceMap });
   const markingInchargeName = currentUser?.name || currentUser?.username || 'System';
+  const teamName = existingTeamRecord?.teamName || getTeamDisplayName(teamId);
   const newRecord = {
     id: index >= 0 ? appData.attendance[index].id : 'att_' + Date.now(),
-    teamId, date, studentAttendanceMap,
-    markedBy: markingInchargeName,
-    // lock the record on save to prevent further changes unless unlocked by Admin
+    teamId: existingTeamRecord?.teamId || teamId,
+    teamName,
+    date,
+    studentAttendanceMap,
+    markedBy: existingTeamRecord?.markedBy || markingInchargeName,
     locked: true,
     teamLocked: true,
-    // default unlock mode: fully locked until an Admin explicitly unlocks
-    // this prevents Admins from editing immediately without using the unlock action
-    unlockMode: 'locked',
+    unlockMode: 'student-unlock',
     timestamp: new Date().toISOString()
   };
 
@@ -1511,7 +1756,6 @@ async function handleSaveAttendance() {
     });
   }
 
-  // Always add a team-locked notification when the record is locked (visible to all users)
   if (newRecord.locked) {
     appData.notifications = Array.isArray(appData.notifications) ? appData.notifications : [];
     appData.notifications.unshift({
@@ -1525,10 +1769,8 @@ async function handleSaveAttendance() {
     });
   }
 
-  // If a student-incharge performed the marking, add notifications for admin and for the incharge
   if (currentUser?.role === 'incharge') {
     appData.notifications = Array.isArray(appData.notifications) ? appData.notifications : [];
-    // Notify admin(s)
     appData.notifications.unshift({
       id: 'notification_' + Date.now() + '_admin',
       type: 'incharge-marked-attendance',
@@ -1539,7 +1781,6 @@ async function handleSaveAttendance() {
       read: false,
       timestamp: new Date().toISOString()
     });
-    // Notify the incharge (self) about locks/summary
     appData.notifications.unshift({
       id: 'notification_' + Date.now() + '_incharge',
       type: 'incharge-attendance-saved',
@@ -1557,16 +1798,17 @@ async function handleSaveAttendance() {
 
   await saveAppData();
   const toastMessage = `${teamId} attendance entered by ${markingInchargeName}.`;
-  showPushNotification(toastMessage, 'success', 4200);
-  alert(teamIsComplete
-    ? `5-Hour attendance saved and the entire team is locked for ${teamId} (${date})!`
-    : `5-Hour attendance saved. Marked students are locked; the team remains open for the remaining students.`);
+  showPushNotification('Team attendance was locked', 'success', 4200);
+  alert('Team attendance was locked. Students marked by this team are now locked for this attendance date.');
   renderAttendanceMarkingForm();
   renderRecordsTable();
 }
 
 async function handleUnlockAttendance() {
-  if (currentUser?.role !== 'admin') return;
+  if (currentUser?.role !== 'admin') {
+    alert('Admin permission required.');
+    return;
+  }
   const teamId = document.getElementById('markTeamSelect').value;
   const date = document.getElementById('markDate').value;
 
@@ -1576,15 +1818,24 @@ async function handleUnlockAttendance() {
     return;
   }
 
+  const confirmUnlock = window.confirm('Admin unlock selected.\n\nOnly admin users will be allowed to edit this marked attendance.');
+  if (!confirmUnlock) return;
+
   record.locked = false;
   record.unlockMode = 'admin';
   await saveAppData();
-  alert('Attendance record unlocked for Admin editing only!');
+  alert('Attendance unlocked for admin editing only.');
   renderAttendanceMarkingForm();
   renderRecordsTable();
 }
 
 async function handleInchargeUnlockAttendance() {
+  const role = currentUser?.role;
+  if (role !== 'admin' && role !== 'incharge') {
+    alert('Admin or assigned incharge permission required.');
+    return;
+  }
+
   const teamId = document.getElementById('markTeamSelect').value;
   const date = document.getElementById('markDate').value;
   const record = appData.attendance.find(a => a.teamId === teamId && a.date === date);
@@ -1593,17 +1844,19 @@ async function handleInchargeUnlockAttendance() {
     alert('No attendance record found for the selected team and date.');
     return;
   }
-  // Only Admin users can perform this unlock action (hide/disable for incharge)
-  if (currentUser?.role !== 'admin') {
-    alert('Only admin users can perform this action.');
+
+  if (!canUnlockAttendanceForUser(teamId, role, currentUser)) {
+    alert('You can only unlock attendance for a team assigned to you.');
     return;
   }
 
-  // Unlock the record and set unlock mode to admin-incharge so both can edit
+  const confirmUnlock = window.confirm('Student unlock selected.\n\nBoth admin and the assigned student incharge can edit this marked attendance.');
+  if (!confirmUnlock) return;
+
   record.locked = false;
-  record.unlockMode = 'admin-incharge';
+  record.unlockMode = 'student-unlock';
   await saveAppData();
-  alert('Attendance record unlocked for Admin and assigned Student Incharge editing.');
+  alert('Attendance unlocked for admin and assigned incharge editing.');
   renderAttendanceMarkingForm();
   renderRecordsTable();
 }
@@ -1713,7 +1966,14 @@ async function handleNotificationsClick() {
   modal.innerHTML = `
     <div class="notes-backdrop"></div>
     <div class="notes-panel">
-      <div class="notes-header"><strong>Notifications</strong><div style="display:flex; gap:8px; align-items:center;"><button id="notifModalBack" class="btn btn-secondary btn-sm">Back</button><button id="notifModalClose" class="btn-close">×</button></div></div>
+      <div class="notes-header">
+        <strong>Notifications</strong>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button id="notifModalBack" class="btn btn-secondary btn-sm">Back</button>
+          <button id="notifModalClear" class="btn btn-danger btn-sm">Clear</button>
+          <button id="notifModalClose" class="btn-close" aria-label="Close notifications">×</button>
+        </div>
+      </div>
       <div class="notes-list"></div>
     </div>
   `;
@@ -1777,21 +2037,156 @@ async function handleNotificationsClick() {
   const backBtn = modal.querySelector('#notifModalBack');
   if (backBtn) backBtn.addEventListener('click', () => { try { goBackTab(); } catch (e) {} modal.remove(); });
 
+  const clearModalBtn = modal.querySelector('#notifModalClear');
+  if (clearModalBtn) {
+    clearModalBtn.addEventListener('click', async () => {
+      const visibleNotifications = getVisibleNotificationsForCurrentUser();
+      if (!visibleNotifications.length) {
+        showPushNotification('No notifications to clear.', 'info');
+        return;
+      }
+      await clearNotificationsForCurrentUser();
+      modal.remove();
+    });
+  }
+
   // basic styles for modal (scoped inline to avoid touching CSS files)
   const styleId = 'notifModalStyles';
   if (!document.getElementById(styleId)) {
     const s = document.createElement('style');
     s.id = styleId;
     s.textContent = `
-      .notes-modal { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; }
-      .notes-backdrop { position: absolute; inset:0; background: rgba(0,0,0,0.45); }
-      .notes-panel { position: relative; background: #fff; border-radius:8px; padding:12px; width: min(760px, 95%); max-height: 80vh; overflow:auto; box-shadow:0 8px 24px rgba(0,0,0,0.2); }
-      .notes-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
-      .btn-close { background:transparent; border:none; font-size:1.25rem; cursor:pointer; }
-      .note-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #f2f2f2; }
-      .note-msg { flex:1; margin-right:12px; color:#222; }
-      .note-actions { white-space:nowrap; }
-      .note-meta { color:#666; font-size:0.8rem; margin-left:12px; }
+      .notes-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+      }
+      .notes-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(2, 6, 23, 0.7);
+        backdrop-filter: blur(2px);
+      }
+      .notes-panel {
+        position: relative;
+        width: min(760px, 100%);
+        max-height: 80vh;
+        overflow: auto;
+        padding: 1rem 1rem 0.75rem;
+        border-radius: 18px;
+        background: rgba(15, 23, 42, 0.95);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        box-shadow: 0 24px 50px rgba(15, 23, 42, 0.42);
+        color: #e2e8f0;
+      }
+      .notes-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 0.85rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+      }
+      .notes-header strong {
+        font-size: 1rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #e2e8f0;
+      }
+      .notes-header > div {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .btn-close {
+        background: transparent;
+        border: none;
+        color: #cbd5e1;
+        font-size: 1.4rem;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0.2rem 0.4rem;
+        border-radius: 8px;
+      }
+      .btn-close:hover {
+        background: rgba(148, 163, 184, 0.12);
+        color: #f8fafc;
+      }
+      .notes-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .note-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.8rem 0.3rem;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+      }
+      .note-msg {
+        flex: 1;
+        min-width: 0;
+        color: #e2e8f0;
+        font-size: 0.93rem;
+        line-height: 1.45;
+        word-break: break-word;
+      }
+      .note-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        white-space: nowrap;
+      }
+      .note-meta {
+        color: #94a3b8;
+        font-size: 0.75rem;
+        margin-left: 0.6rem;
+        text-align: right;
+        white-space: nowrap;
+      }
+      .note-row:last-child {
+        border-bottom: none;
+      }
+      @media (max-width: 640px) {
+        .notes-modal {
+          align-items: flex-end;
+          padding: 0;
+        }
+        .notes-panel {
+          width: 100%;
+          max-height: 88vh;
+          border-radius: 20px 20px 0 0;
+          padding: 0.9rem 0.8rem 0.75rem;
+        }
+        .notes-header {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        .notes-header > div {
+          width: 100%;
+          justify-content: flex-end;
+        }
+        .note-row {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 0.55rem;
+        }
+        .note-actions,
+        .note-meta {
+          width: 100%;
+          justify-content: flex-start;
+          margin-left: 0;
+          text-align: left;
+        }
+      }
     `;
     document.head.appendChild(s);
   }
@@ -1907,7 +2302,7 @@ function getSortedFilteredAttendanceRows() {
       rowList.push({
         studentId: student.id,
         date: att.date,
-        teamName: att.teamId,
+        teamName: att.teamName || getTeamDisplayName(att.teamId) || att.teamId || 'Unknown Team',
         studentName: student.name,
         rollNumber: student.rollNumber,
         registerNumber: student.registerNumber,
@@ -1921,7 +2316,7 @@ function getSortedFilteredAttendanceRows() {
         h3: hours.h3 || 'P',
         h4: hours.h4 || 'P',
         h5: hours.h5 || 'P',
-        markedBy: att.markedBy,
+        markedBy: att.markedBy || 'Unknown',
         timestamp: att.timestamp,
         sortDate: att.date
       });
@@ -1986,7 +2381,71 @@ function renderRecordsTable() {
 
   rowList.forEach(r => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `
+    if (typeof window !== 'undefined' && window.innerWidth <= 480) {
+      tr.innerHTML = `
+        <td colspan="15">
+          <div class="student-card" style="width:100%; max-width:100%; box-sizing:border-box; border-radius:20px; padding:20px 18px; background:var(--card-bg, #fff); border:1px solid var(--border, rgba(148,163,184,0.25)); box-shadow:0 8px 20px rgba(15,23,42,0.08);">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">DATE</div>
+              <div style="font-size:0.95rem; font-weight:600; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${r.date || '—'}</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">TEAM</div>
+              <div style="font-size:0.95rem; font-weight:700; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${r.teamName || '—'}</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">STUDENT NAME</div>
+              <div style="font-size:0.95rem; font-weight:600; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${r.studentName || '—'}</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">ROLL NO</div>
+              <div style="font-size:0.95rem; font-weight:600; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${r.rollNumber || '—'}</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">REGISTER NO</div>
+              <div style="font-size:0.95rem; font-weight:600; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${r.registerNumber || '—'}</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">DEPARTMENT</div>
+              <div style="font-size:0.95rem; font-weight:600; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${r.deptName || '—'}</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">CATEGORY</div>
+              <div style="font-size:0.95rem; font-weight:600; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;"><span class="badge ${r.department === 'Aided' ? 'badge-aided' : 'badge-self'}">${r.department || '—'}</span></div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">YEAR</div>
+              <div style="font-size:0.95rem; font-weight:600; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${r.year || '—'}</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">H1</div>
+              <div style="font-size:0.95rem; font-weight:700; color:var(--text, #0f172a); text-align:right; min-width:0;"><span class="pa-badge ${r.h1 === 'P' ? 'present' : 'absent'}">${r.h1 || 'A'}</span></div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">H2</div>
+              <div style="font-size:0.95rem; font-weight:700; color:var(--text, #0f172a); text-align:right; min-width:0;"><span class="pa-badge ${r.h2 === 'P' ? 'present' : 'absent'}">${r.h2 || 'A'}</span></div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">H3</div>
+              <div style="font-size:0.95rem; font-weight:700; color:var(--text, #0f172a); text-align:right; min-width:0;"><span class="pa-badge ${r.h3 === 'P' ? 'present' : 'absent'}">${r.h3 || 'A'}</span></div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">H4</div>
+              <div style="font-size:0.95rem; font-weight:700; color:var(--text, #0f172a); text-align:right; min-width:0;"><span class="pa-badge ${r.h4 === 'P' ? 'present' : 'absent'}">${r.h4 || 'A'}</span></div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">H5</div>
+              <div style="font-size:0.95rem; font-weight:700; color:var(--text, #0f172a); text-align:right; min-width:0;"><span class="pa-badge ${r.h5 === 'P' ? 'present' : 'absent'}">${r.h5 || 'A'}</span></div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-top:1px solid var(--border, rgba(148,163,184,0.25)); margin-top:8px; padding-top:12px;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">MARKED BY</div>
+              <div style="font-size:0.92rem; font-weight:600; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${r.markedBy || 'Unknown'}</div>
+            </div>
+          </div>
+        </td>
+      `;
+    } else {
+      tr.innerHTML = `
       <td data-label="Date">${r.date}</td>
       <td data-label="Team"><strong>${r.teamName}</strong></td>
       <td data-label="Student Name">${r.studentName}</td>
@@ -2002,6 +2461,7 @@ function renderRecordsTable() {
       <td data-label="H5" style="text-align: center;"><span class="pa-badge ${r.h5 === 'P' ? 'present' : 'absent'}">${r.h5}</span></td>
       <td data-label="Marked By">${r.markedBy}</td>
     `;
+    }
     tbody.appendChild(tr);
   });
 }
@@ -2160,7 +2620,57 @@ function renderStudentsTable() {
 
   filtered.forEach(s => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `
+    if (typeof window !== 'undefined' && window.innerWidth <= 480) {
+      tr.innerHTML = `
+        <td colspan="11">
+          <div class="student-card" style="width:100%; max-width:100%; box-sizing:border-box; border-radius:20px; padding:20px 18px; background:var(--card-bg, #fff); border:1px solid var(--border, rgba(148,163,184,0.25)); box-shadow:0 8px 20px rgba(15,23,42,0.08);">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">ROLL NO</div>
+              <div style="font-size:0.95rem; font-weight:700; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${s.rollNumber || '—'}</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">REGISTER NO</div>
+              <div style="font-size:0.95rem; font-weight:600; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${s.registerNumber || '—'}</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">NAME</div>
+              <div style="font-size:0.95rem; font-weight:600; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${s.name || '—'}</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">MOBILE</div>
+              <div style="font-size:0.95rem; font-weight:600; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${s.mobile || '—'}</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">DEPT NAME</div>
+              <div style="font-size:0.95rem; font-weight:600; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${s.deptName || 'Computer Science'}</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">CATEGORY</div>
+              <div style="font-size:0.95rem; font-weight:600; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;"><span class="badge ${s.department === 'Aided' ? 'badge-aided' : 'badge-self'}">${s.department || '—'}</span></div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">YEAR</div>
+              <div style="font-size:0.95rem; font-weight:600; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${s.year || 'N/A'}</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">SECTION</div>
+              <div style="font-size:0.95rem; font-weight:600; color:var(--text, #0f172a); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${s.section || '—'}</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; border-bottom:1px solid var(--border, rgba(148,163,184,0.25)); padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">TEAM</div>
+              <div style="font-size:0.95rem; font-weight:700; color:var(--primary, #2563eb); text-align:right; min-width:0; overflow-wrap:anywhere; word-break:break-word;">${getStudentTeamIds(s).join(', ') || '—'}</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; padding:10px 0;">
+              <div style="font-size:0.69rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted, #64748b);">ACTIONS</div>
+              <div style="display:flex; gap:6px; justify-content:flex-end; align-items:center; flex-wrap:wrap; min-width:0;">
+                ${currentUser?.role === 'admin' ? `<button class="btn btn-secondary btn-sm" onclick="openStudentModal('${s.id}')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}')">Delete</button>` : ''}
+              </div>
+            </div>
+          </div>
+        </td>
+      `;
+    } else {
+      tr.innerHTML = `
       <td data-label="Roll No"><strong>${s.rollNumber}</strong></td>
       <td data-label="Register No">${s.registerNumber}</td>
       <td data-label="Name">${s.name}</td>
@@ -2177,6 +2687,7 @@ function renderStudentsTable() {
         </div>
       </td>
     `;
+    }
     tbody.appendChild(tr);
   });
 
@@ -2242,7 +2753,12 @@ async function handleSaveStudent(e) {
     appData.students.push(studentData);
   }
 
-  await saveAppData();
+  try {
+    await saveAppData();
+  } catch (error) {
+    console.warn('Student form save completed with local fallback.', error && error.message ? error.message : error);
+  }
+
   closeModal('studentModal');
   renderStudentsTable();
   renderDashboardOverview();

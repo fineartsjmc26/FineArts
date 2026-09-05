@@ -4,37 +4,36 @@
    ========================================================================== */
 
 :root {
-  --primary: #2f5bff;
-  --primary-dark: #234ae0;
-  --primary-light: rgba(47, 91, 255, 0.08);
-  --secondary: #6d5efc;
-  --bg: #f5f5f7;
-  --surface: #ffffff;
-  --success: #0f9f6e;
-  --success-light: rgba(15, 159, 110, 0.12);
-  --warning: #d28a00;
-  --warning-light: rgba(210, 138, 0, 0.12);
-  --danger: #dc3e3e;
-  --danger-light: rgba(220, 62, 62, 0.12);
-  --purple: #6d5efc;
-  --border: #e7e7ed;
-  --text: #111827;
-  --text-muted: #6b7280;
-  --text-faint: #98a2b3;
+  --primary: var(--color-primary, #2563EB);
+  --primary-dark: var(--color-primary-hover, #1D4ED8);
+  --primary-light: rgba(37, 99, 235, 0.12);
+  --secondary: var(--color-accent, #0D9488);
+  --bg: var(--color-bg, #F6F8FC);
+  --surface: var(--color-card, #FFFFFF);
+  --card-bg: var(--surface);
+  --success: var(--color-success, #16A34A);
+  --success-light: var(--color-success-light, #DCFCE7);
+  --warning: var(--color-warning, #D97706);
+  --warning-light: var(--color-warning-light, #FEF3C7);
+  --danger: var(--color-danger, #DC2626);
+  --danger-light: var(--color-danger-light, #FEE2E2);
+  --purple: var(--color-locked, #7C3AED);
+  --border: var(--color-border, #E2E8F0);
+  --text: var(--color-text, #0F172A);
+  --text-muted: var(--color-text-secondary, #64748B);
+  --text-faint: var(--color-text-muted, #94A3B8);
 
   --radius-sm: 10px;
   --radius: 14px;
   --radius-lg: 20px;
   --radius-xl: 24px;
 
-  /* Type scale (reduce distinct font-sizes across the UI) */
-  --fs-xl: 2rem;    /* largest numeric display */
-  --fs-lg: 1.4rem;  /* headings / prominent */
-  --fs-md: 1rem;    /* body / card titles */
-  --fs-sm: 0.88rem; /* labels / buttons */
-  --fs-xs: 0.72rem; /* metadata / pills */
+  --fs-xl: 2rem;
+  --fs-lg: 1.4rem;
+  --fs-md: 1rem;
+  --fs-sm: 0.88rem;
+  --fs-xs: 0.72rem;
 
-  /* Button sizing */
   --btn-h: 44px;
 
   --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.04);
@@ -48,25 +47,26 @@
 
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
-  /* Map legacy CSS variables used in this stylesheet to the shared design tokens
-     so components consume the centralized `themes/design-tokens.css` values. */
-  :root {
-    --bg: var(--bg-base);
-    --surface: var(--bg-surface);
-    --border: var(--border-subtle);
-    --text: var(--text-primary);
-    --text-muted: var(--text-secondary);
-    --text-faint: var(--text-muted);
-    --primary: var(--accent);
-    --primary-dark: var(--accent-active, var(--accent));
-    --primary-light: var(--accent-soft);
-    --success: var(--success);
-    --success-light: var(--success-soft);
-    --warning: var(--warning);
-    --warning-light: var(--warning-soft);
-    --danger: var(--danger);
-    --danger-light: var(--danger-soft);
-  }
+
+:root[data-theme='dark'] {
+  --primary: var(--color-primary, #38BDF8);
+  --primary-dark: var(--color-primary-hover, #0EA5E9);
+  --primary-light: rgba(56, 189, 248, 0.14);
+  --secondary: var(--color-accent, #2DD4BF);
+  --bg: var(--color-bg, #07111F);
+  --surface: var(--color-card, #0D1B2A);
+  --success: var(--color-success, #4ADE80);
+  --success-light: var(--color-success-light, #123B2A);
+  --warning: var(--color-warning, #FBBF24);
+  --warning-light: var(--color-warning-light, #3D3213);
+  --danger: var(--color-danger, #FB7185);
+  --danger-light: var(--color-danger-light, #421D27);
+  --purple: var(--color-locked, #A78BFA);
+  --border: var(--color-border, #1E3A4F);
+  --text: var(--color-text, #F1F5F9);
+  --text-muted: var(--color-text-secondary, #94A3B8);
+  --text-faint: var(--color-text-muted, #64748B);
+}
 /* Accessibility helper: visually hidden but available to screen readers */
 .sr-only {
   position: absolute !important;
@@ -106,9 +106,9 @@ html, body {
 body {
   font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background:
-    radial-gradient(circle at top left, rgba(47, 91, 255, 0.12), transparent 20rem),
-    radial-gradient(circle at bottom right, rgba(109, 94, 252, 0.10), transparent 24rem),
-    linear-gradient(135deg, #f5f5f7 0%, #f7f8fd 48%, #f5f7fb 100%);
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.10), transparent 20rem),
+    radial-gradient(circle at bottom right, rgba(13, 148, 136, 0.08), transparent 24rem),
+    linear-gradient(135deg, #F6F8FC 0%, #F8FAFC 48%, #F6F8FC 100%);
   color: var(--text);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
@@ -116,9 +116,9 @@ body {
 }
 [data-theme="dark"] body {
   background:
-    radial-gradient(circle at top left, rgba(138, 167, 255, 0.10), transparent 20rem),
-    radial-gradient(circle at bottom right, rgba(109, 94, 252, 0.16), transparent 25rem),
-    linear-gradient(180deg, #0c1118 0%, #101923 100%);
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.10), transparent 20rem),
+    radial-gradient(circle at bottom right, rgba(45, 212, 191, 0.08), transparent 25rem),
+    linear-gradient(180deg, #07111F 0%, #0E1A2A 100%);
 }
 button, input, select {
   font: inherit;
@@ -193,6 +193,12 @@ a { color: inherit; }
   border: 1px solid rgba(23, 50, 77, 0.08);
   border-radius: 22px;
   box-shadow: 0 18px 44px rgba(23, 50, 77, 0.12);
+  background: rgba(255, 255, 255, 0.82);
+}
+:root[data-theme='dark'] .auth-card {
+  background: rgba(13, 27, 42, 0.92);
+  border-color: var(--color-border);
+  box-shadow: 0 18px 44px rgba(2, 6, 23, 0.35);
 }
 .auth-card .auth-title {
   font-family: 'Space Grotesk', sans-serif;
@@ -229,7 +235,7 @@ a { color: inherit; }
 .sidebar {
   width: var(--sidebar-w);
   flex-shrink: 0;
-  background: linear-gradient(180deg, #fffdfb 0%, #fff5f7 100%);
+  background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -238,6 +244,10 @@ a { color: inherit; }
   height: 100vh;
   z-index: 200;
   transition: width 0.25s var(--ease), transform 0.3s var(--ease);
+}
+:root[data-theme='dark'] .sidebar {
+  background: linear-gradient(180deg, #0D1B2A 0%, #12263A 100%);
+  border-right-color: var(--border);
 }
 
 .app-shell.sidebar-collapsed .sidebar {
@@ -541,14 +551,17 @@ button[data-tab="settingsTab"] .nav-label,
   align-items: center;
   gap: 1rem;
   padding: 0 1.5rem;
-  background: rgba(248, 250, 252, 0.85);
+  background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 100;
 }
-[data-theme="dark"] .header { background: rgba(11, 18, 32, 0.85); }
+:root[data-theme='dark'] .header {
+  background: rgba(13, 27, 42, 0.88);
+  border-bottom-color: var(--border);
+}
 
 .header-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
 
@@ -825,6 +838,7 @@ button[data-tab="settingsTab"] .nav-label,
   margin-bottom: 1.5rem;
   font-size: var(--fs-md);
   transition: box-shadow 0.2s var(--ease);
+  background: var(--surface);
 }
 
 .card h2 {
@@ -1231,6 +1245,18 @@ button[data-tab="settingsTab"] .nav-label,
   font-size: 0.87rem;
 }
 
+/* Attendance-specific table: fixed layout with proportional column widths
+   Columns: Roll(7%), Register(13%), Name(30%), Dept(12%), Category(8%), H1-H5(6% each) */
+.attendance-table {
+  table-layout: fixed;
+}
+.attendance-table th:nth-child(1), .attendance-table td:nth-child(1) { width: 7%; }
+.attendance-table th:nth-child(2), .attendance-table td:nth-child(2) { width: 13%; }
+.attendance-table th:nth-child(3), .attendance-table td:nth-child(3) { width: 30%; }
+.attendance-table th:nth-child(4), .attendance-table td:nth-child(4) { width: 12%; }
+.attendance-table th:nth-child(5), .attendance-table td:nth-child(5) { width: 8%; }
+.attendance-table th:nth-child(n+6), .attendance-table td:nth-child(n+6) { width: 6%; }
+
 .data-table th {
   background: var(--bg);
   color: var(--text-muted);
@@ -1238,7 +1264,8 @@ button[data-tab="settingsTab"] .nav-label,
   font-size: 0.76rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  padding: 12px 16px;
+  /* align table cell inner padding with card horizontal padding for visual alignment */
+  padding: 12px 1.75rem;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
   position: sticky;
@@ -1247,10 +1274,83 @@ button[data-tab="settingsTab"] .nav-label,
 }
 
 .data-table td {
-  padding: 12px 16px;
+  /* match header: keep horizontal gutters consistent with toolbar/button area */
+  padding: 12px 1.75rem;
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
   color: var(--text);
+}
+
+/* Ensure H1-H5 buttons are uniform on desktop/tablet */
+.attendance-table .pa-toggle-btn {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Prevent floating Save FAB from overlapping last table row */
+.section-shell .table-responsive {
+  padding-bottom: 96px; /* space for FAB + comfortable inset */
+}
+
+/* Increase contrast / divider visibility for mobile stacked cards */
+.responsive-cards tbody tr { border: 1px solid rgba(30, 56, 84, 0.06); }
+
+/* Mobile: adjust the grid-template to better match the percentage widths above */
+@media (max-width: 480px) {
+  .lock-banner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .lock-banner > span {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+  .lock-banner .btn {
+    min-height: 44px;
+    height: 44px;
+    flex: 1 1 140px;
+    width: auto;
+  }
+  /* Prevent grid-based compression on mobile rows — render rows as stacked cards */
+  #attendanceMarkTbody tr {
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    margin: 0 0 12px 0 !important;
+  }
+  #attendanceMarkTbody td[data-label="Roll No"] { font-size: 0.78rem !important; }
+}
+
+/* Scoped adjustments for the batch action buttons to ensure consistent height,
+   padding and prevent text wrapping while keeping existing classes intact. */
+#batchActionBtns .btn {
+  height: var(--btn-h);
+  min-height: var(--btn-h);
+  padding: 0.5rem 0.9rem;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Ensure the toolbar content and table responsive container align to the
+   same left/right visual boundaries across viewports. */
+.table-toolbar, .table-responsive {
+  width: 100%;
+}
+
+/* Small screens: keep buttons on same row but make them touch-friendly */
+@media (max-width: 480px) {
+  #batchActionBtns .btn { height: 40px; min-height: 40px; padding: 0.42rem 0.7rem; }
+  .chip-row { gap: 0.5rem; }
 }
 
 .data-table tbody tr { transition: background 0.12s var(--ease); }
@@ -1311,7 +1411,11 @@ button[data-tab="settingsTab"] .nav-label,
 .chip-row {
   display: flex;
   gap: 0.7rem;
-  flex-wrap: wrap;
+  /* keep action chips on a single row and align vertically */
+  flex-wrap: nowrap;
+  align-items: center;
+  /* allow horizontal scrolling on very small screens instead of wrapping */
+  overflow-x: auto;
 }
 .lock-banner {
   display: flex;
@@ -1325,6 +1429,14 @@ button[data-tab="settingsTab"] .nav-label,
   border: 1px solid rgba(245, 158, 11, 0.3);
   color: #92400e;
   margin-bottom: 1rem;
+}
+.lock-banner > span {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.lock-banner .btn {
+  min-height: 44px;
+  height: 44px;
 }
 .lock-banner svg {
   width: 16px;
@@ -1594,46 +1706,6 @@ button[data-tab="settingsTab"] .nav-label,
   .section-heading { flex-direction: column; }
   .floating-action { display: inline-flex; }
   .section-actions { display: none; }
-
-  /* Table -> Card layout on mobile */
-  .table-responsive.responsive-cards { border: none; overflow: visible; }
-  .responsive-cards table, .responsive-cards thead, .responsive-cards tbody,
-  .responsive-cards th, .responsive-cards td, .responsive-cards tr {
-    display: block;
-  }
-  .responsive-cards thead tr { position: absolute; top: -9999px; left: -9999px; }
-  .responsive-cards tbody tr {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    margin-bottom: 12px;
-    padding: 10px 14px;
-    box-shadow: var(--shadow-sm);
-  }
-  .responsive-cards tbody tr:nth-child(even) { background: var(--surface); }
-  .responsive-cards td {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    text-align: right;
-    border-bottom: 1px dashed var(--border);
-    padding: 9px 0;
-    white-space: normal;
-  }
-  .responsive-cards td:last-child { border-bottom: none; }
-  .responsive-cards td::before {
-    content: attr(data-label);
-    font-weight: 700;
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    color: var(--text-muted);
-    text-align: left;
-    flex-shrink: 0;
-  }
-  .responsive-cards td[data-label=""]::before,
-  .responsive-cards td:not([data-label])::before { content: none; }
 }
 
 @media (max-width: 480px) {
@@ -1647,6 +1719,270 @@ button[data-tab="settingsTab"] .nav-label,
   .hero-ring { width: 160px; height: 160px; }
   .hero-ring-alt { width: 120px; height: 120px; }
   .lock-banner { align-items: flex-start; }
+
+  .container,
+  .section-shell,
+  .tab-panel,
+  .table-responsive,
+  .table-responsive.responsive-cards,
+  .responsive-cards,
+  .responsive-cards table,
+  .responsive-cards tbody,
+  .responsive-cards tr,
+  .responsive-cards td,
+  #studentsTbody,
+  #attendanceMarkTbody,
+  #recordsTbody,
+  .data-table,
+  .data-table tbody,
+  .data-table tr,
+  .data-table td {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .container {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  .table-responsive,
+  .table-responsive.responsive-cards,
+  .responsive-cards {
+    overflow-x: hidden;
+  }
+
+  .responsive-cards tbody,
+  .responsive-cards tr,
+  .responsive-cards td,
+  .data-table tbody,
+  .data-table tr,
+  .data-table td {
+    display: block;
+  }
+
+  .responsive-cards thead,
+  .responsive-cards .data-table thead,
+  .responsive-cards thead tr,
+  .responsive-cards .data-table thead tr {
+    display: none !important;
+  }
+
+  #studentsTbody,
+  #attendanceMarkTbody,
+  #recordsTbody,
+  #studentsTbody tr,
+  #attendanceMarkTbody tr,
+  #recordsTbody tr,
+  .responsive-cards tbody tr {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  #studentsTbody tr,
+  #attendanceMarkTbody tr,
+  #recordsTbody tr,
+  .responsive-cards tbody tr {
+    margin: 0 0 12px 0 !important;
+  }
+
+  .responsive-cards td[colspan],
+  .responsive-cards td:has(.student-card),
+  #studentsTbody td[colspan],
+  #attendanceMarkTbody td[colspan],
+  #recordsTbody td[colspan] {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .responsive-cards td::before,
+  .responsive-cards .data-table td::before,
+  .responsive-cards td[data-label="Actions"]::before,
+  .responsive-cards .data-table td[data-label="Actions"]::before {
+    content: none;
+  }
+
+  .student-card {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    margin: 0 0 12px 0;
+    padding: 20px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+
+  .student-card .sc-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-width: 0;
+    min-height: 52px;
+    padding: 10px 0;
+    gap: 12px;
+    box-sizing: border-box;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+  }
+
+  .student-card .sc-row:last-child {
+    border-bottom: none;
+  }
+
+  .student-card .sc-label {
+    flex: 0 0 auto;
+    min-width: 0;
+    color: var(--text-muted);
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  .student-card .sc-value {
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: right;
+    color: var(--text);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
+  }
+
+  .student-card .sc-value strong {
+    font-weight: 800;
+  }
+
+  .student-card .sc-value .badge,
+  .student-card .sc-value .badge-self,
+  .student-card .sc-value .badge-aided {
+    display: inline-block;
+    margin-left: auto;
+  }
+
+  .student-card .action-group {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+  }
+
+  .student-card .action-group .btn,
+  .student-card .action-group .btn-sm {
+    min-height: 38px;
+    white-space: nowrap;
+  }
+
+  .student-card .pa-toggle-btn,
+  .student-card .pa-badge {
+    min-width: 40px;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    font-weight: 800;
+  }
+
+  .student-card .pa-toggle-btn {
+    background: #fff;
+    border: 1px solid rgba(34,197,94,0.25);
+    color: var(--success);
+  }
+
+  .student-card .pa-toggle-btn.absent {
+    background: #fff7f7;
+    border-color: rgba(220,62,62,0.18);
+    color: var(--danger);
+  }
+
+  .student-card .pa-badge {
+    min-width: 42px;
+    width: auto;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+  }
+
+  .student-card .pa-badge.present {
+    background: rgba(25,135,84,0.1);
+    color: var(--success);
+  }
+
+  .student-card .pa-badge.absent {
+    background: rgba(217,87,95,0.1);
+    color: var(--danger);
+  }
+
+  .student-card hr {
+    border: none;
+    border-top: 1px solid rgba(0,0,0,0.06);
+    margin: 12px 0;
+  }
+
+  #attendanceMarkTbody tr {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 0 12px 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  #attendanceMarkTbody td,
+  #studentsTbody td,
+  #recordsTbody td {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    padding: 10px 0 !important;
+    border-bottom: 1px solid rgba(0,0,0,0.06) !important;
+  }
+
+  .responsive-cards td[data-label="Actions"] {
+    justify-content: flex-end;
+  }
+
+  .responsive-cards .pa-toggle-btn,
+  #attendanceMarkTbody .pa-toggle-btn {
+    min-width: 42px;
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+  }
+}
+
+
+
+/* ---------- Tablet (481px - 768px): slightly roomier touch targets ---------- */
+@media (min-width: 481px) and (max-width: 768px) {
+  .responsive-cards tbody tr { padding: 0.65rem 0.9rem; margin-bottom: 10px; }
+  .responsive-cards td { font-size: 0.92rem; min-height: 48px; padding: 0.4rem 0; gap: 6px 10px; }
+  .responsive-cards td::before { font-size: 0.7rem; max-width: 38%; }
+  .responsive-cards .btn, .responsive-cards .btn-sm, .responsive-cards .pa-toggle-btn { min-height: 44px; padding: 0.36rem 0.6rem; }
+}
+
+/* ---------- Accessibility fallback: keep touch targets reachable on any coarse pointer ---------- */
+@media (any-pointer: coarse) {
+  .responsive-cards .btn, .responsive-cards .btn-sm, .responsive-cards .pa-toggle-btn { min-height: 40px; }
 }
 
 /* ============================================================================
@@ -1782,7 +2118,7 @@ html:not([data-theme="dark"]) .btn-primary { box-shadow: 0 4px 12px rgba(37, 99,
 .data-table tbody tr:nth-child(even) { background: rgba(127, 160, 159, 0.045); }
 .data-table tbody tr:hover { background: var(--primary-light); }
 .badge-self { color: var(--purple); }
-.modal-backdrop { background: rgba(5, 18, 24, 0.62); }
+.modal-backdrop { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 9999; background: rgba(5, 18, 24, 0.62); backdrop-filter: blur(4px); }
 
 @media (max-width: 600px) {
   .header { height: 66px; }
@@ -1820,12 +2156,16 @@ html:not([data-theme="dark"]) .btn-primary { box-shadow: 0 4px 12px rgba(37, 99,
 
 [data-theme="dark"] .pa-toggle-btn.present,
 [data-theme="dark"] .pa-badge.present {
-  color: var(--success);
+  background: rgba(34, 197, 94, 0.17);
+  color: #a7f3d0;
+  box-shadow: inset 0 0 0 1.5px rgba(74, 222, 128, 0.45);
 }
 
 [data-theme="dark"] .pa-toggle-btn.absent,
 [data-theme="dark"] .pa-badge.absent {
-  color: var(--danger);
+  background: rgba(239, 68, 68, 0.14);
+  color: #fca5a5;
+  box-shadow: inset 0 0 0 1.5px rgba(248, 113, 113, 0.45);
 }
 
 [data-theme="dark"] .badge-self {

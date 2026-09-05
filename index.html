@@ -359,8 +359,8 @@
 
         <div id="markLockBanner" class="hidden lock-banner">
           <span><svg data-lucide="lock"></svg> <strong>Student Attendance Locked:</strong> Students already marked for this date cannot be marked again in another team.</span>
-          <button class="btn btn-secondary btn-sm admin-only" id="unlockBtn" type="button">Admin Unlock</button>
-          <button class="btn btn-secondary btn-sm" id="inchargeUnlockBtn" type="button">Student Unlock</button>
+          <button class="btn btn-secondary btn-sm admin-only" id="unlockBtn" type="button">ADMIN UNLOCK</button>
+          <button class="btn btn-secondary btn-sm admin-only" id="inchargeUnlockBtn" type="button">STUDENT UNLOCK</button>
         </div>
 
         <div class="table-toolbar">
@@ -372,7 +372,8 @@
         </div>
 
         <div class="table-responsive responsive-cards">
-          <table class="data-table">
+          <table class="data-table attendance-table">
+            <caption class="sr-only">Team Students attendance table for selected team and date</caption>
             <thead>
               <tr>
                 <th>Roll No</th>
@@ -416,7 +417,7 @@
             <span>Select Fields</span>
             <label style="font-size:0.85rem; color:var(--text-muted);"><input type="checkbox" id="exportSelectAll" checked> Select All</label>
           </div>
-          <div id="exportColumnsList" style="display:grid; grid-template-columns:1fr; gap:0.5rem; max-height:260px; overflow:auto; border:1px solid var(--border); padding:0.75rem; border-radius:6px; background:#fff;">
+          <div id="exportColumnsList" style="display:grid; grid-template-columns:1fr; gap:0.5rem; max-height:260px; overflow:auto; border:1px solid var(--border); padding:0.75rem; border-radius:6px; background:var(--surface); color:var(--text);">
             <label><input type="checkbox" data-key="name" checked> Student Name</label>
             <label><input type="checkbox" data-key="deptName" checked> Department</label>
             <label><input type="checkbox" data-key="year" checked> Year</label>
@@ -451,37 +452,6 @@
           </div>
         </div>
 
-        <div class="modal-backdrop hidden" id="attendanceExportModal">
-          <div class="modal-content" style="max-width:620px;">
-            <div class="modal-header">
-              <h3 class="modal-title">Export Attendance History</h3>
-              <button class="close-btn" id="closeAttendanceExportModal">&times;</button>
-            </div>
-
-            <div style="padding: 1rem;">
-              <div style="font-weight:600; margin-bottom:0.5rem; display:flex; justify-content:space-between; align-items:center;">
-                <span>Select Fields</span>
-                <label style="font-size:0.85rem; color:var(--text-muted);"><input type="checkbox" id="attendanceExportSelectAll" checked> Select All</label>
-              </div>
-              <div id="attendanceExportColumnsList" style="display:grid; grid-template-columns:1fr; gap:0.5rem; max-height:260px; overflow:auto; border:1px solid var(--border); padding:0.75rem; border-radius:6px; background:#fff;">
-                <label><input type="checkbox" data-key="studentName" checked> Student Name</label>
-                <label><input type="checkbox" data-key="section" checked> Section</label>
-                <label><input type="checkbox" data-key="deptName" checked> Department Name</label>
-                <label><input type="checkbox" data-key="year" checked> Year</label>
-                <label><input type="checkbox" data-key="department" checked> Aided / Self Finance</label>
-                <label><input type="checkbox" data-key="teamName" checked> Team</label>
-                <label><input type="checkbox" data-key="hourWiseAttendance" checked> Hour-wise attendance</label>
-                <label><input type="checkbox" data-key="rollNumber" checked> Roll Number</label>
-                <label><input type="checkbox" data-key="registerNumber" checked> Register Number</label>
-              </div>
-
-              <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem;">
-                <button class="btn btn-secondary" id="cancelAttendanceExportBtn" type="button">Cancel</button>
-                <button class="btn btn-primary" id="startAttendanceExportBtn" type="button">Export Selected</button>
-              </div>
-            </div>
-          </div>
-        </div>
 
         <!-- Categorize & Filter Bar (With Calendar Date Picker) -->
         <div class="filter-bar" style="align-items: flex-end;">
@@ -564,7 +534,6 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th style="width:40px"><input type="checkbox" id="recordsSelectAll" aria-label="Select all records"></th>
                 <th>Date</th>
                 <th>Team</th>
                 <th>Student Name</th>
@@ -772,7 +741,7 @@
           </div>
           <div style="display:flex; gap:8px; align-items:center;">
             <button class="btn btn-secondary" onclick="goBackTab()">← Back</button>
-            <button class="btn btn-success" id="exportExcelBtn">📥 Export Report</button>
+            <button class="btn btn-success" id="exportReportBtn">📥 Export Report</button>
           </div>
         </div>
 
@@ -849,6 +818,38 @@
     </section>
 
       </main>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="attendanceExportModal">
+    <div class="modal-content" style="max-width:620px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Export Attendance History</h3>
+        <button class="close-btn" id="closeAttendanceExportModal">&times;</button>
+      </div>
+
+      <div style="padding: 1rem;">
+        <div style="font-weight:600; margin-bottom:0.5rem; display:flex; justify-content:space-between; align-items:center;">
+          <span>Select Fields</span>
+          <label style="font-size:0.85rem; color:var(--text-muted);"><input type="checkbox" id="attendanceExportSelectAll" checked> Select All</label>
+        </div>
+        <div id="attendanceExportColumnsList" style="display:grid; grid-template-columns:1fr; gap:0.5rem; max-height:260px; overflow:auto; border:1px solid var(--border); padding:0.75rem; border-radius:6px; background:var(--surface); color:var(--text);">
+          <label><input type="checkbox" data-key="studentName" checked> Student Name</label>
+          <label><input type="checkbox" data-key="section" checked> Section</label>
+          <label><input type="checkbox" data-key="deptName" checked> Department Name</label>
+          <label><input type="checkbox" data-key="year" checked> Year</label>
+          <label><input type="checkbox" data-key="department" checked> Aided / Self Finance</label>
+          <label><input type="checkbox" data-key="teamName" checked> Team</label>
+          <label><input type="checkbox" data-key="hourWiseAttendance" checked> Hour-wise attendance</label>
+          <label><input type="checkbox" data-key="rollNumber" checked> Roll Number</label>
+          <label><input type="checkbox" data-key="registerNumber" checked> Register Number</label>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem;">
+          <button class="btn btn-secondary" id="cancelAttendanceExportBtn" type="button">Cancel</button>
+          <button class="btn btn-primary" id="startAttendanceExportBtn" type="button">Export Selected</button>
+        </div>
+      </div>
     </div>
   </div>
 
