@@ -610,7 +610,6 @@ function initUIEvents() {
     });
   }
   document.getElementById('unlockBtn').addEventListener('click', handleUnlockAttendance);
-  document.getElementById('inchargeUnlockBtn').addEventListener('click', handleInchargeUnlockAttendance);
   document.getElementById('notifBtn')?.addEventListener('click', handleNotificationsClick);
   document.getElementById('notifClearBtn')?.addEventListener('click', async () => {
     if (!currentUser) return;
@@ -1549,18 +1548,8 @@ function renderAttendanceMarkingForm() {
   }
 
   const unlockBtn = document.getElementById('unlockBtn');
-  const inchargeUnlockBtn = document.getElementById('inchargeUnlockBtn');
   const isAdminVisible = Boolean(existingRecord?.locked && currentUser?.role === 'admin');
-  const isStudentUnlockVisible = Boolean(
-    existingRecord?.locked &&
-    (
-      currentUser?.role === 'admin' ||
-      (currentUser?.role === 'incharge' && canUnlockAttendanceForUser(teamId, currentUser.role, currentUser))
-    ) &&
-    canMarkTeam(teamId)
-  );
   if (unlockBtn) unlockBtn.classList.toggle('hidden', !isAdminVisible);
-  if (inchargeUnlockBtn) inchargeUnlockBtn.classList.toggle('hidden', !isStudentUnlockVisible);
 
   if (teamStudents.length === 0) {
     tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 2rem;">No students assigned to this Team.</td></tr>`;
@@ -3141,12 +3130,6 @@ function closeModal(modalId) {
     if (unlockBtn && typeof handleUnlockAttendance === 'function') {
       try { unlockBtn.removeEventListener('click', handleUnlockAttendance); } catch (e) {}
       unlockBtn.addEventListener('click', handleUnlockAttendance);
-    }
-
-    const inchargeUnlockBtn = document.getElementById('inchargeUnlockBtn');
-    if (inchargeUnlockBtn && typeof handleInchargeUnlockAttendance === 'function') {
-      try { inchargeUnlockBtn.removeEventListener('click', handleInchargeUnlockAttendance); } catch (e) {}
-      inchargeUnlockBtn.addEventListener('click', handleInchargeUnlockAttendance);
     }
   } catch (err) {
     console.warn('Late handler bind failed', err && err.message);
