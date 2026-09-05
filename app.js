@@ -136,6 +136,53 @@ function getMergedAppData(source) {
   return { ...defaultAppData, ...merged, ...source };
 }
 
+function getAttendanceKey(record) {
+  if (!record || !record.teamId || !record.date) return null;
+  return `${record.teamId}::${record.date}`;
+}
+
+function mergeAttendanceRecords(existingRecords = [], incomingRecords = []) {
+  const merged = new Map();
+  const allRecords = [...(Array.isArray(existingRecords) ? existingRecords : []), ...(Array.isArray(incomingRecords) ? incomingRecords : [])];
+
+  allRecords.forEach(record => {
+    if (!record || !record.teamId || !record.date) return;
+    const key = getAttendanceKey(record);
+    if (!key) return;
+    const current = merged.get(key);
+    if (!current || !current.timestamp) {
+      merged.set(key, { ...record });
+      return;
+    }
+
+    const currentTime = Date.parse(current.timestamp || 0) || 0;
+    const recordTime = Date.parse(record.timestamp || 0) || 0;
+    merged.set(key, recordTime >= currentTime ? { ...record } : { ...current });
+  });
+
+  return Array.from(merged.values());
+}
+
+function mergeNotifications(existingNotifications = [], incomingNotifications = []) {
+  const merged = new Map();
+  const allNotifications = [...(Array.isArray(existingNotifications) ? existingNotifications : []), ...(Array.isArray(incomingNotifications) ? incomingNotifications : [])];
+
+  allNotifications.forEach(notification => {
+    if (!notification || !notification.id) return;
+    const current = merged.get(notification.id);
+    if (!current || !current.timestamp) {
+      merged.set(notification.id, { ...notification });
+      return;
+    }
+
+    const currentTime = Date.parse(current.timestamp || 0) || 0;
+    const notificationTime = Date.parse(notification.timestamp || 0) || 0;
+    merged.set(notification.id, notificationTime >= currentTime ? { ...notification } : { ...current });
+  });
+
+  return Array.from(merged.values());
+}
+
 // Initialize Firestore
 function getFirestoreDocRef() {
   if (!firestoreDb) return null;
@@ -352,9 +399,8 @@ async function saveAppData() {
       const snap = await txn.get(docRef);
       const serverData = snap.exists ? snap.data() : {};
       const merged = Object.assign({}, serverData, JSON.parse(JSON.stringify(appData)));
-      // Prefer to merge arrays/objects conservatively: explicitly set attendance and notifications
-      merged.attendance = JSON.parse(JSON.stringify(appData.attendance || []));
-      merged.notifications = JSON.parse(JSON.stringify(appData.notifications || []));
+      merged.attendance = mergeAttendanceRecords(serverData.attendance || [], appData.attendance || []);
+      merged.notifications = mergeNotifications(serverData.notifications || [], appData.notifications || []);
       merged.timestamp = new Date().toISOString();
       txn.set(docRef, merged);
     }));
