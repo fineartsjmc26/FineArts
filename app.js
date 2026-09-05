@@ -1873,42 +1873,10 @@ async function handleUnlockAttendance() {
   renderRecordsTable();
 }
 
-async function handleInchargeUnlockAttendance() {
-  const role = currentUser?.role;
-  if (role !== 'admin' && role !== 'incharge') {
-    alert('Admin or assigned incharge permission required.');
-    return;
-  }
-
-  const teamId = document.getElementById('markTeamSelect').value;
-  const date = document.getElementById('markDate').value;
-  const record = appData.attendance.find(a => a.teamId === teamId && a.date === date);
-
-  if (!record) {
-    alert('No attendance record found for the selected team and date.');
-    return;
-  }
-
-  if (!canUnlockAttendanceForUser(teamId, role, currentUser)) {
-    alert('You can only unlock attendance for a team assigned to you.');
-    return;
-  }
-
-  const confirmUnlock = window.confirm('Student unlock selected.\n\nBoth admin and the assigned student incharge can edit this marked attendance.');
-  if (!confirmUnlock) return;
-
-  record.locked = false;
-  record.unlockMode = 'student-unlock';
-  await saveAppData();
-  alert('Attendance unlocked for admin and assigned incharge editing.');
-  renderAttendanceMarkingForm();
-  renderRecordsTable();
-}
-
 // Expose critical handlers to the global scope for event binding and tests
 try {
   globalThis.handleUnlockAttendance = typeof handleUnlockAttendance === 'function' ? handleUnlockAttendance : undefined;
-  globalThis.handleInchargeUnlockAttendance = typeof handleInchargeUnlockAttendance === 'function' ? handleInchargeUnlockAttendance : undefined;
+  globalThis.handleInchargeUnlockAttendance = undefined;
 } catch (e) {
   console.warn('Could not expose unlock handlers globally', e && e.message);
 }
