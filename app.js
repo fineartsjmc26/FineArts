@@ -374,8 +374,8 @@ async function loadAppData() {
 
 // Save Application Data
 async function saveAppData() {
-  localStorage.setItem('attendance_app_data', JSON.stringify(appData));
-
+  // Firestore is the primary source of truth for entered attendance data.
+  // Do not persist the main attendance records into localStorage; keep it as a fallback only.
   const projectId = (typeof firebase !== 'undefined' && firebase?.app?.()) ? firebase.app().options?.projectId || 'unknown' : 'unknown';
   const remoteSyncEnabled = localStorage.getItem(OFFLINE_MODE_KEY) !== 'true' && (typeof navigator === 'undefined' || navigator.onLine !== false);
 
@@ -412,9 +412,9 @@ async function saveAppData() {
   } catch (error) {
     firestoreSyncHealthy = false;
     lastFirestoreError = error;
-    console.warn('Cloud sync failed. Student data has been preserved in local storage, and the app will continue in offline-safe mode.', error && error.message ? error.message : error);
+    console.warn('Cloud sync failed. The app is waiting to sync attendance data to Firestore.', error && error.message ? error.message : error);
     if (typeof showPushNotification === 'function') {
-      showPushNotification('Cloud sync failed. Your data is saved locally.', 'info', 4500);
+      showPushNotification('Cloud sync failed. Attendance is pending sync to the database.', 'info', 4500);
     }
     return false;
   }
