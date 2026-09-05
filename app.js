@@ -610,6 +610,7 @@ function initUIEvents() {
     });
   }
   document.getElementById('unlockBtn').addEventListener('click', handleUnlockAttendance);
+  document.getElementById('inchargeUnlockBtn')?.addEventListener('click', handleInchargeUnlockAttendance);
   document.getElementById('notifBtn')?.addEventListener('click', handleNotificationsClick);
   document.getElementById('notifClearBtn')?.addEventListener('click', async () => {
     if (!currentUser) return;
@@ -1548,8 +1549,15 @@ function renderAttendanceMarkingForm() {
   }
 
   const unlockBtn = document.getElementById('unlockBtn');
+  const inchargeUnlockBtn = document.getElementById('inchargeUnlockBtn');
   const isAdminVisible = Boolean(existingRecord?.locked && currentUser?.role === 'admin');
+  const isStudentUnlockVisible = Boolean(
+    existingRecord?.locked &&
+    currentUser?.role === 'admin' &&
+    canMarkTeam(teamId)
+  );
   if (unlockBtn) unlockBtn.classList.toggle('hidden', !isAdminVisible);
+  if (inchargeUnlockBtn) inchargeUnlockBtn.classList.toggle('hidden', !isStudentUnlockVisible);
 
   if (teamStudents.length === 0) {
     tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 2rem;">No students assigned to this Team.</td></tr>`;
@@ -1873,10 +1881,36 @@ async function handleUnlockAttendance() {
   renderRecordsTable();
 }
 
+async function handleInchargeUnlockAttendance() {
+  if (currentUser?.role !== 'admin') {
+    alert('Admin permission required.');
+    return;
+  }
+
+  const teamId = document.getElementById('markTeamSelect').value;
+  const date = document.getElementById('markDate').value;
+  const record = appData.attendance.find(a => a.teamId === teamId && a.date === date);
+
+  if (!record) {
+    alert('No attendance record found for the selected team and date.');
+    return;
+  }
+
+  const confirmUnlock = window.confirm('Student unlock selected.\n\nBoth admin and the assigned student incharge can edit this marked attendance.');
+  if (!confirmUnlock) return;
+
+  record.locked = false;
+  record.unlockMode = 'student-unlock';
+  await saveAppData();
+  alert('Attendance unlocked for admin and assigned incharge editing.');
+  renderAttendanceMarkingForm();
+  renderRecordsTable();
+}
+
 // Expose critical handlers to the global scope for event binding and tests
 try {
   globalThis.handleUnlockAttendance = typeof handleUnlockAttendance === 'function' ? handleUnlockAttendance : undefined;
-  globalThis.handleInchargeUnlockAttendance = undefined;
+  globalThis.handleInchargeUnlockAttendance = typeof handleInchargeUnlockAttendance === 'function' ? handleInchargeUnlockAttendance : undefined;
 } catch (e) {
   console.warn('Could not expose unlock handlers globally', e && e.message);
 }
@@ -3098,6 +3132,12 @@ function closeModal(modalId) {
     if (unlockBtn && typeof handleUnlockAttendance === 'function') {
       try { unlockBtn.removeEventListener('click', handleUnlockAttendance); } catch (e) {}
       unlockBtn.addEventListener('click', handleUnlockAttendance);
+    }
+
+    const inchargeUnlockBtn = document.getElementById('inchargeUnlockBtn');
+    if (inchargeUnlockBtn && typeof handleInchargeUnlockAttendance === 'function') {
+      try { inchargeUnlockBtn.removeEventListener('click', handleInchargeUnlockAttendance); } catch (e) {}
+      inchargeUnlockBtn.addEventListener('click', handleInchargeUnlockAttendance);
     }
   } catch (err) {
     console.warn('Late handler bind failed', err && err.message);
