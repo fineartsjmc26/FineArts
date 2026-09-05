@@ -1010,13 +1010,13 @@ function renderSettingsTab() {
   const roleLabel = currentUser?.role ? currentUser.role.toUpperCase() : 'GUEST';
   const onlineStatus = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
   const offlineForced = localStorage.getItem(OFFLINE_MODE_KEY) === 'true';
-  let syncText = 'Online sync active';
+  let syncText = 'Database linked';
   if (offlineForced) {
     syncText = 'Offline cache active';
   } else if (!onlineStatus) {
     syncText = 'No network connection';
   } else if (!firestoreSyncHealthy) {
-    syncText = 'Cloud sync unavailable';
+    syncText = 'Waiting for Firestore';
   }
 
   const roleEl = document.getElementById('settingsRoleLabel');
